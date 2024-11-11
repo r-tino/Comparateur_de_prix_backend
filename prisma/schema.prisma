@@ -1,0 +1,196 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// Les Modeles
+model Utilisateur {
+  id_User           String    @id @default(auto()) @map("_id") @db.ObjectId
+  nom_user          String
+  email             String    @unique
+  motDePasse        String
+  role              RoleEnum
+  dateCreation      DateTime  @default(now())
+  derniereConnexion DateTime?
+  // Champ pour la photo de profil
+  photoProfil       String? // URL de la photo de profil
+
+  // Relations
+  commentaire      Commentaire[]              // Un utilisateur peut ecrire plusieurs commentaires.(0...*)
+  notification     Notification[]             // Un utilisateur peut recevoir plusieurs notifications.(0...*)
+  produits         Produit[]                  // Un utilisateur (vendeur/admin) peut publier plusieurs produits.
+  note             Note[]                     // Un utilisateur peut attribuer plusieurs notes.(0...*)
+  offres           Offre[]                    // Un utilisateur peut proposer plusieurs offres (en tant que vendeur/admin).
+}
+
+enum RoleEnum {
+  Admin
+  Vendeur
+  Visiteur
+}
+
+// Modele photo
+model Photo {
+  id_Photo      String         @id @default(auto()) @map("_id") @db.ObjectId
+  url           String
+  couverture    Boolean
+  type          PhotoTypeEnum
+
+  // Une photo peut être liée à un produit (optionnel pour les photos de profil).
+  produit       Produit?       @relation(fields: [produitId], references: [id_Produit])
+  produitId     String?        @db.ObjectId
+}
+
+enum PhotoTypeEnum {
+  Produit
+  Couverture
+}
+
+// Modele Produit
+model Produit {
+  id_Produit      String    @id @default(auto()) @map("_id") @db.ObjectId
+  nom_Produit     String
+  description     String
+  qualiteMoyenne  Float?
+  prixInitial     Float
+  datePublication DateTime  @default(now())
+  disponibilite   Boolean   @default(true) // Nouveau champ pour gérer la disponibilité
+  
+  // Relations
+
+  // Un utilisateur peut publier plusieurs de produits.(0...*)
+  utilisateur     Utilisateur  @relation(fields: [utilisateurId], references: [id_User])
+  utilisateurId   String       @db.ObjectId
+
+  photos         Photo[]                    // Un produit peut avoir plusieurs photos (galeri_photo).(0...*) 
+  offre          Offre[]                    // Un produit peut avoir plusieurs offres.(0...*)
+  historiquePrix HistoriquePrix[]           // Un produit peut avoir plusieurs Historique de Prix.(0...*)
+  notes          Note[]                     // Un produit est evaluer par plusieurs notes. (0...*)
+
+  // Un produit appartient à une seule catégorie.(1)
+  categorie      Categorie?       @relation(fields: [categorieId], references: [id_Categorie])
+  categorieId    String?          @db.ObjectId
+
+  Commentaire Commentaire[]                   // Un produit peut recevoir plusieurs commentaires. (0...*)
+}
+
+// Modele offres
+model Offre {
+  id_Offre       String    @id @default(auto()) @map("_id") @db.ObjectId
+  prix           Float
+  stock          Int
+  dateExpiration DateTime?
+
+  // Relations
+
+  // Une offre est liée à un seul produit.(1)
+  produit   Produit @relation(fields: [produitId], references: [id_Produit])
+  produitId String  @db.ObjectId
+
+  // Une offre est proposée par un utilisateur (vendeur/admin).(1)
+  utilisateur     Utilisateur @relation(fields: [utilisateurId], references: [id_User])
+  utilisateurId   String      @db.ObjectId
+
+  // Une offre peut avoir une promotion.(1)
+  promotion   Promotion? @relation(fields: [promotionId], references: [id_Promotion])
+  promotionId String?    @db.ObjectId
+}
+
+// Modele Promotion
+model Promotion {
+  id_Promotion String   @id @default(auto()) @map("_id") @db.ObjectId
+  pourcentage  Float
+  dateDebut    DateTime
+  dateFin      DateTime
+
+  // Relations
+  offre Offre[]           // Une promotion appliquer à une seul offre. (1)
+}
+
+// Modele HistoriquePrix
+model HistoriquePrix {
+  id_HistoriquePrix String   @id @default(auto()) @map("_id") @db.ObjectId
+  prix              Float
+  dateChangement    DateTime  
+
+  // Relation avec Produit
+
+  // Un historique des prix est lié à une produit.(1)
+  produit   Produit @relation(fields: [produitId], references: [id_Produit])
+  produitId String  @db.ObjectId
+}
+
+// Modele Note
+model Note {
+  id_Note  String   @id @default(auto()) @map("_id") @db.ObjectId
+  valeur   Int
+  dateNote DateTime   @default(now())
+
+  // Relation
+
+  // Une note est attribuée par un utilisateur.(1)
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id_User])
+  utilisateurId String      @db.ObjectId
+
+  // Une note evalue un produit.(1)
+  produit   Produit @relation(fields: [produitId], references: [id_Produit])
+  produitId String  @db.ObjectId
+}
+
+// Modele Categorie
+model Categorie {
+  id_Categorie String @id @default(auto()) @map("_id") @db.ObjectId
+  nomCategorie String
+  isActive     Boolean  @default(true) // Ajout du champ isActive
+
+  // Relation avec les Produits
+  produits Produit[]            // Une catégorie peut regrouper plusieurs produits.(0...*)
+}
+
+// Modele Commentaire
+model Commentaire {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  contenu         String
+  dateCommentaire DateTime  @default(now())
+
+  // Relations
+
+  // Un commentaire a été écrit par un utilisateur.(1)
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id_User])
+  utilisateurId String      @db.ObjectId
+
+  // Un commentaire est lié à un produit.(1)
+  produit   Produit? @relation(fields: [produitId], references: [id_Produit])
+  produitId String?  @db.ObjectId
+}
+
+// Modele Notification
+model Notification {
+  id_Notification String        @id @default(auto()) @map("_id") @db.ObjectId
+  typeNotif       TypeNotifEnum
+  message         String
+  dateNotif       DateTime      @default(now())
+  lu              Boolean       @default(false)
+
+  // Relation avec Utilisateur
+
+  // Une notification est envoyée à un utilisateur.(1)
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id_User])
+  utilisateurId String      @db.ObjectId
+}
+
+enum TypeNotifEnum {
+  Promotion
+  Commentaire
+  Autre
+}
