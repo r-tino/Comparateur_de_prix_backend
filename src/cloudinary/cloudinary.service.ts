@@ -42,13 +42,31 @@ export class CloudinaryService {
     });
   }
 
+  /**
+   * Supprime une image de Cloudinary.
+   * @param publicId ID public de l'image à supprimer.
+   * @returns Une promesse résolue si la suppression est réussie.
+   */
   async deleteImage(publicId: string): Promise<void> {
+    console.log(`Début de la suppression de l'image avec Public ID : ${publicId}`);
+
     return new Promise((resolve, reject) => {
-      cloudinary.uploader.destroy(publicId, (error) => {
+      cloudinary.uploader.destroy(publicId, (error, result) => {
         if (error) {
-          return reject(error);
+          console.error(`Erreur lors de la suppression de l'image dans Cloudinary : ${error.message}`);
+          return reject(new Error(`Échec de la suppression de l'image dans Cloudinary : ${error.message}`));
         }
-        resolve();
+
+        if (result.result === 'ok') {
+          console.log(`Image supprimée avec succès dans Cloudinary. Public ID : ${publicId}`);
+          resolve();
+        } else if (result.result === 'not found') {
+          console.warn(`Image non trouvée dans Cloudinary. Public ID : ${publicId}`);
+          resolve(); // Considérer comme résolu pour éviter un blocage.
+        } else {
+          console.error(`Résultat inattendu lors de la suppression : ${result.result}`);
+          return reject(new Error(`Résultat inattendu lors de la suppression de l'image : ${result.result}`));
+        }
       });
     });
   }

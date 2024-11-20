@@ -4,7 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { Utilisateur, RoleEnum } from '@prisma/client';
-import { promises as fs } from 'fs';
+import * as fs from 'fs'; // Import de fs pour utiliser existsSync
+import { promises as fsPromises } from 'fs'; // Import pour les méthodes asynchrones
 import * as path from 'path';
 import { CreateUtilisateurDto } from './dto/create-utilisateur.dto';
 import { UpdateUtilisateurDto } from './dto/update-utilisateur.dto';
@@ -15,10 +16,11 @@ export class UtilisateurService {
     this.ensureUploadsDirectoryExists();
   }
 
+  // Vérifier et créer le répertoire 'uploads/profiles' si nécessaire
   private async ensureUploadsDirectoryExists() {
     const directoryPath = path.join('uploads', 'profiles');
     try {
-      await fs.mkdir(directoryPath, { recursive: true });
+      await fsPromises.mkdir(directoryPath, { recursive: true }); // Utilisation de fsPromises pour éviter les erreurs
       console.log('Le dossier uploads/profiles a été créé avec succès.');
     } catch (error) {
       console.error('Erreur lors de la création du dossier uploads/profiles:', error);
@@ -43,6 +45,26 @@ export class UtilisateurService {
       }
       return { url: 'uploads/profiles/default.jpg', public_id: '' };
     }
+
+    // Méthode pour nettoyer l'ancienne photo
+    private async nettoyerAnciennePhoto(photoUrl: string | null, publicId: string | null): Promise<void> {
+      try {
+        if (publicId) {
+          console.log(`Suppression de l'image sur Cloudinary avec Public ID : ${publicId}`);
+          await this.cloudinaryService.deleteImage(publicId);
+          console.log(`Image supprimée avec succès de Cloudinary.`);
+        }
+  
+        if (photoUrl && photoUrl.startsWith('uploads/') && fs.existsSync(photoUrl)) {
+          console.log(`Suppression du fichier local : ${photoUrl}`);
+          await fsPromises.unlink(photoUrl); // Utilisation de fsPromises.unlink pour éviter des erreurs de callback
+          console.log(`Fichier local supprimé avec succès.`);
+        }
+      } catch (error) {
+        console.error(`Erreur lors du nettoyage de l'ancienne photo : ${error.message}`);
+      }
+    }
+  
   
 
   // Méthode de validation de mot de passe et évaluation de sa force
@@ -222,16 +244,31 @@ export class UtilisateurService {
   
       // Gestion de la photo de profil
       let photoProfil = existingUser.photoProfil;
+      let photoPublicId = existingUser.photoPublicId;
+
       if (photo) {
+
         console.log(`Téléversement de la nouvelle photo depuis Multer : ${photo.path}`);
+
+        // Nettoyer l'ancienne photo
+        await this.nettoyerAnciennePhoto(existingUser.photoProfil, existingUser.photoPublicId);
+
         const uploadResult = await this.cloudinaryService.uploadLocalImage(photo.path, 'users/profiles');
         photoProfil = uploadResult.url; // Mise à jour de l'URL uniquement
         console.log(`Photo téléversée avec succès : ${photoProfil}`);
+        photoPublicId = uploadResult.public_id;
       }  else if (data.photoProfil) {
-        console.log(`Gestion de la photoProfil dans le corps : ${data.photoProfil}`);
+        console.log(`Gestion de la photoProfil fournie dans le corps de la requête : ${data.photoProfil}`);
+
+        // Nettoyer l'ancienne photo si nouvelle photo uploadée
+        if (data.photoProfil !== existingUser.photoProfil) {
+          await this.nettoyerAnciennePhoto(existingUser.photoProfil, existingUser.photoPublicId);
+        }
+        
         const uploadResult = await this.handlePhoto(data.photoProfil);
         photoProfil = uploadResult.url;
         console.log(`Photo mise à jour avec Cloudinary : ${photoProfil}`);
+        photoPublicId = uploadResult.public_id;
       }
   
       // Mise à jour des données dans la base de données
@@ -245,6 +282,7 @@ export class UtilisateurService {
           role: data.role || existingUser.role,
           derniereConnexion: data.derniereConnexion || existingUser.derniereConnexion,
           photoProfil, // Mise à jour de l'URL de la photo
+          photoPublicId,
         },
       });
   
@@ -268,7 +306,7 @@ export class UtilisateurService {
       // Supprimer la photo dans Cloudinary si elle n'est pas par défaut
       if (user.photoPublicId  && user.photoProfil !== 'uploads/profiles/default.jpg') {
         console.log(`Suppression de la photo sur Cloudinary avec public_id: ${user.photoPublicId}`);
-        await this.cloudinaryService.deleteImage(user.photoProfil);
+        await this.nettoyerAnciennePhoto(user.photoProfil, user.photoPublicId);
       }
   
       // Supprimer les relations associées
