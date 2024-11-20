@@ -20,4 +20,8 @@ export class CreateUtilisateurDto {
   @IsEnum(RoleEnum, { message: 'Le rôle doit être Admin, Vendeur ou Visiteur' })
   @IsOptional()
   role?: RoleEnum;
+
+  @IsOptional()
+  @IsString()
+  photoProfil?: string; // Ajout de cette propriété pour résoudre l'erreur
 }

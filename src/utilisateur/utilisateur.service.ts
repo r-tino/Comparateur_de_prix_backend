@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+// src/utilisateur/utilisateur.service.ts
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { Utilisateur, RoleEnum } from '@prisma/client';
 import { promises as fs } from 'fs';
 import * as path from 'path';
@@ -9,7 +11,7 @@ import { UpdateUtilisateurDto } from './dto/update-utilisateur.dto';
 
 @Injectable() 
 export class UtilisateurService {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(private readonly prisma: PrismaService, private readonly cloudinaryService: CloudinaryService,) {
     this.ensureUploadsDirectoryExists();
   }
 
@@ -23,62 +25,120 @@ export class UtilisateurService {
     }
   }
 
+    // Téléverse la photo locale sur Cloudinary et retourne l'URL mise à jour
+    async handlePhoto(photo: string | Express.Multer.File): Promise<{ url: string; public_id: string }> {
+      if (typeof photo === 'string') {
+        if (photo.startsWith('http')) {
+          return { url: photo, public_id: '' }; // Si c'est une URL distante
+        } else {
+          // Téléversement de la photo locale sur Cloudinary
+          console.log(`Téléversement du fichier local: ${photo}`);
+          const uploadResult = await this.cloudinaryService.uploadLocalImage(photo, 'users/profiles');
+          console.log(`Téléversement réussi: URL - ${uploadResult.url}, Public ID - ${uploadResult.public_id}`);
+          return { url: uploadResult.url, public_id: uploadResult.public_id };
+        }
+      } else if (photo && photo.path) {
+        const uploadResult = await this.cloudinaryService.uploadLocalImage(photo.path, 'users/profiles');
+        return { url: uploadResult.url, public_id: uploadResult.public_id };
+      }
+      return { url: 'uploads/profiles/default.jpg', public_id: '' };
+    }
+  
+
   // Méthode de validation de mot de passe et évaluation de sa force
   private validatePassword(password: string): string {
     const minLength = 6;
+  
+    // Vérification obligatoire : longueur minimale
+    if (password.length < minLength) {
+      throw new BadRequestException(
+        'Le mot de passe doit contenir au moins six caractères.'
+      );
+    }
+  
+    // Vérification facultative pour évaluer la force
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumber = /\d/.test(password);
     const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-
-    if (password.length < minLength || !hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecialChar) {
-      throw new BadRequestException(
-        'Le mot de passe doit contenir au moins six caractères, incluant une lettre majuscule, une lettre minuscule, un chiffre, et un caractère spécial.'
-      );
-    }
-
+  
+    // Évaluer la force du mot de passe
     let strength = 0;
     if (hasUpperCase) strength++;
     if (hasLowerCase) strength++;
     if (hasNumber) strength++;
     if (hasSpecialChar) strength++;
-
+  
+    // Retourner la force
     return strength >= 3 ? 'fort' : 'faible';
   }
+  
 
   // Méthode de création d'un utilisateur avec chiffrement du mot de passe et rôle par défaut
   async createUser(data: CreateUtilisateurDto, photoFile?: Express.Multer.File): Promise<{ message: string }> {
+    console.log("Début de création utilisateur:", { data, photoFile });
+
+    const utilisateurExistant = await this.prisma.utilisateur.findUnique({
+      where: { email: data.email },
+    });
+  
+    if (utilisateurExistant) {
+      throw new ConflictException('Un utilisateur avec cet email existe déjà.');
+    }
+
+    if (!data.email || !data.nom_user) {
+      console.error("Email ou nom d'utilisateur manquant !");
+      throw new BadRequestException("Les champs email et nom d'utilisateur sont obligatoires.");
+    }
+
     try {
+      // Définir le rôle par défaut
       const role = data.role || RoleEnum.Visiteur;
+
+      // Vérifier que les mots de passe correspondent
       if (data.motDePasse !== data.confirmPassword) {
         throw new BadRequestException("Le mot de passe et sa confirmation ne correspondent pas.");
       }
 
+      // Valider la force du mot de passe
       const passwordStrength = this.validatePassword(data.motDePasse);
       if (passwordStrength === 'faible') {
-        throw new BadRequestException("Le mot de passe est trop faible.");
+        throw new BadRequestException(
+          "Le mot de passe est trop faible. Utilisez au moins 3 des éléments suivants : une majuscule, une minuscule, un chiffre ou un caractère spécial."
+        );
       }
 
+      // Hacher le mot de passe après validation
       const hashedPassword = await bcrypt.hash(data.motDePasse, 10);
-      
-     // Gestion du fichier de photo
-     let photoProfil = 'uploads/profiles/default.jpg';
-     if (photoFile) {
-       const fileName = `${Date.now()}-${photoFile.originalname}`;
-       const filePath = path.join('uploads', 'profiles', fileName);
-       await fs.writeFile(filePath, photoFile.buffer);
-       photoProfil = filePath;
-     }
 
-      const utilisateur = await this.prisma.utilisateur.create({
-        data: {
-          nom_user: data.nom_user,
-          email: data.email,
-          motDePasse: hashedPassword,
-          role,
-          photoProfil
-        },
-      });
+      // Gestion de la photo de profil
+      let photoProfil = 'uploads/profiles/default.jpg'; // Photo par défaut
+
+    if (photoFile) {
+      // Cas où un fichier est envoyé via Multer
+      const uploadResult = await this.cloudinaryService.uploadLocalImage(photoFile.path, 'users/profiles');
+      photoProfil = uploadResult.url;
+    } else if (data.photoProfil) {
+      if (data.photoProfil.startsWith('http')) {
+        // Utilisation d'une URL existante
+        photoProfil = data.photoProfil;
+      } else {
+        // Téléversement d'un chemin local à Cloudinary
+        const uploadResult = await this.cloudinaryService.uploadLocalImage(data.photoProfil, 'users/profiles');
+        photoProfil = uploadResult.url;
+      }
+    }
+
+    // Création de l'utilisateur dans la base de données
+    await this.prisma.utilisateur.create({
+      data: {
+        nom_user: data.nom_user,
+        email: data.email,
+        motDePasse: hashedPassword,
+        role,
+        photoProfil,
+      },
+    });
       return { message: 'Utilisateur créé avec succès' };
     } catch (error) {
       console.error(error);
@@ -128,35 +188,54 @@ export class UtilisateurService {
   }
 
   // Méthode de mise à jour d'un utilisateur avec gestion du hachage de mot de passe si modifié
-  async updateUser(id: string, data: UpdateUtilisateurDto, photoFile?: Express.Multer.File): Promise<{ message: string }> {
+  async updateUser(
+    id: string,
+    data: UpdateUtilisateurDto,
+    photo?: Express.Multer.File
+  ): Promise<{ message: string }> {
+    console.log(`Début de la mise à jour de l'utilisateur avec ID: ${id}`);
+    console.log(`Données reçues pour la mise à jour :`, { data });
+  
     try {
       const existingUser = await this.prisma.utilisateur.findUnique({
         where: { id_User: id },
       });
-      if (!existingUser) throw new NotFoundException(`Utilisateur avec ID ${id} non trouvé.`);
-
-        // Si le mot de passe est fourni, appliquez le hachage
+  
+      if (!existingUser) {
+        throw new NotFoundException(`Utilisateur avec ID ${id} non trouvé.`);
+      }
+      console.log(`Utilisateur existant trouvé :`, existingUser);
+  
+      // Gestion du mot de passe
       let updatedPassword = existingUser.motDePasse;
       if (data.motDePasse) {
-        this.validatePassword(data.motDePasse);
-        updatedPassword = await bcrypt.hash(data.motDePasse, 10);
-      } else {
-        updatedPassword = existingUser.motDePasse;
-      }
-
-      let photoProfil = existingUser.photoProfil || 'uploads/profiles/default.jpg';
-      if (photoFile) {
-        const fileName = `${Date.now()}-${photoFile.originalname}`;
-        const filePath = path.join('uploads', 'profiles', fileName);
-
-        if (existingUser.photoProfil && existingUser.photoProfil !== 'uploads/profiles/default.jpg') {
-          await fs.unlink(existingUser.photoProfil).catch(() => null);
+        console.log(`Validation et hachage du mot de passe...`);
+        const passwordStrength = this.validatePassword(data.motDePasse);
+        if (passwordStrength === 'faible') {
+          throw new BadRequestException(
+            "Le mot de passe est trop faible. Utilisez au moins 3 des éléments suivants : une majuscule, une minuscule, un chiffre ou un caractère spécial."
+          );
         }
-
-        await fs.writeFile(filePath, photoFile.buffer);
-        photoProfil = filePath;
+        updatedPassword = await bcrypt.hash(data.motDePasse, 10);
+        console.log(`Mot de passe mis à jour avec succès.`);
       }
-
+  
+      // Gestion de la photo de profil
+      let photoProfil = existingUser.photoProfil;
+      if (photo) {
+        console.log(`Téléversement de la nouvelle photo depuis Multer : ${photo.path}`);
+        const uploadResult = await this.cloudinaryService.uploadLocalImage(photo.path, 'users/profiles');
+        photoProfil = uploadResult.url; // Mise à jour de l'URL uniquement
+        console.log(`Photo téléversée avec succès : ${photoProfil}`);
+      }  else if (data.photoProfil) {
+        console.log(`Gestion de la photoProfil dans le corps : ${data.photoProfil}`);
+        const uploadResult = await this.handlePhoto(data.photoProfil);
+        photoProfil = uploadResult.url;
+        console.log(`Photo mise à jour avec Cloudinary : ${photoProfil}`);
+      }
+  
+      // Mise à jour des données dans la base de données
+      console.log(`Enregistrement des nouvelles données dans la base de données...`);
       await this.prisma.utilisateur.update({
         where: { id_User: id },
         data: {
@@ -165,34 +244,45 @@ export class UtilisateurService {
           motDePasse: updatedPassword,
           role: data.role || existingUser.role,
           derniereConnexion: data.derniereConnexion || existingUser.derniereConnexion,
-          photoProfil, // Mise à jour directe de la photo de profil
+          photoProfil, // Mise à jour de l'URL de la photo
         },
       });
+  
+      console.log(`Mise à jour réussie. URL de la nouvelle photo : ${photoProfil}`);
       return { message: 'Utilisateur mis à jour avec succès' };
     } catch (error) {
-      return { message: `Échec de la mise à jour de l'utilisateur` };
+      console.error(`Erreur lors de la mise à jour de l'utilisateur :`, error);
+      throw new Error(`Échec de la mise à jour de l'utilisateur : ${error.message}`);
     }
   }
+  
 
   // Méthode de suppression d'un utilisateur avec nettoyage des relations
   async deleteUser(id: string): Promise<{ message: string }> {
     try {
-      const result = await this.getUserById(id);
-      const user = result.user; // Accéder à l'utilisateur depuis la réponse de getUserById
+      const result = await this.getUserById(id); // Récupération des données de l'utilisateur
+      const user = result.user; // Extraction de la clé 'user'
+  
       if (!user) throw new NotFoundException(`Utilisateur avec ID ${id} non trouvé.`);
-
-      if (user.photoProfil && user.photoProfil !== 'uploads/profiles/default.jpg') {
-        await fs.unlink(user.photoProfil).catch(() => null);
+  
+      // Supprimer la photo dans Cloudinary si elle n'est pas par défaut
+      if (user.photoPublicId  && user.photoProfil !== 'uploads/profiles/default.jpg') {
+        console.log(`Suppression de la photo sur Cloudinary avec public_id: ${user.photoPublicId}`);
+        await this.cloudinaryService.deleteImage(user.photoProfil);
       }
-    
+  
+      // Supprimer les relations associées
       await this.prisma.commentaire.deleteMany({ where: { utilisateurId: id } });
       await this.prisma.notification.deleteMany({ where: { utilisateurId: id } });
       await this.prisma.note.deleteMany({ where: { utilisateurId: id } });
+  
+      // Supprimer l'utilisateur
       await this.prisma.utilisateur.delete({ where: { id_User: id } });
-
+  
       return { message: 'Utilisateur supprimé avec succès' };
     } catch (error) {
-      return { message: `Échec de la suppression de l'utilisateur avec ID ${id}` };
+      console.error(error);
+      throw new BadRequestException("Échec de la suppression de l'utilisateur.");
     }
-  }
+  }  
 }

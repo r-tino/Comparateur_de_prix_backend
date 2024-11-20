@@ -1,3 +1,4 @@
+// src/categorie/categorie.service.ts
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service'; // Assurez-vous que PrismaService est configuré
 import { Categorie, Prisma } from '@prisma/client';

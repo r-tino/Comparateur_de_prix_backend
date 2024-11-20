@@ -1,3 +1,4 @@
+// src/categorie/categorie.controller.ts
 import { Controller, Post, Get, Put, Delete, Body, Param, UseGuards, Query, Req } from '@nestjs/common';
 import { CategorieService } from './categorie.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';

@@ -17,8 +17,9 @@ export class JwtAuthGuard implements CanActivate {
     if (
       (routePath === '/auth/login') ||
       (routePath === '/utilisateurs' && method === 'POST') ||
-      (routePath === '/offres' && method === 'GET') ||
-      (routePath === '/offres/:id' && method === 'GET')
+      (routePath === '/utilisateurs/:id' && method === 'GET') ||
+      (routePath === '/api/offres' && method === 'GET') ||
+      (routePath === '/api/offres/:id' && method === 'GET')
     ) {
       return true;
     }
@@ -31,7 +32,11 @@ export class JwtAuthGuard implements CanActivate {
     
     try {
       const decoded = this.jwtService.verify(token);
-      request.user = decoded; // Ajouter les informations de l'utilisateur à la requête
+      // Mappez correctement l'ID utilisateur dans `req.user` en utilisant `userId`
+      request.user = {
+        ...decoded,
+        id_User: decoded.id_User || decoded.userId, // Ajoutez `id_User` en utilisant `userId` si `id_User` est absent
+      };
       return true;
     } catch (error) {
       throw new UnauthorizedException('Token invalide ou expiré.');

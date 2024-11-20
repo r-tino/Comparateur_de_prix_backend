@@ -24,6 +24,7 @@ model Utilisateur {
   derniereConnexion DateTime?
   // Champ pour la photo de profil
   photoProfil       String? // URL de la photo de profil
+  photoPublicId String?
 
   // Relations
   commentaire      Commentaire[]              // Un utilisateur peut ecrire plusieurs commentaires.(0...*)
@@ -39,22 +40,16 @@ enum RoleEnum {
   Visiteur
 }
 
-// Modele photo
-model Photo {
-  id_Photo      String         @id @default(auto()) @map("_id") @db.ObjectId
-  url           String
-  couverture    Boolean
-  type          PhotoTypeEnum
+  // Modele photo
+  model Photo {
+    id_Photo      String         @id @default(auto()) @map("_id") @db.ObjectId
+    url           String
+    couverture    Boolean
 
-  // Une photo peut être liée à un produit (optionnel pour les photos de profil).
-  produit       Produit?       @relation(fields: [produitId], references: [id_Produit])
-  produitId     String?        @db.ObjectId
-}
-
-enum PhotoTypeEnum {
-  Produit
-  Couverture
-}
+    // Une photo peut être liée à un produit (optionnel pour les photos de profil).
+    produit       Produit?       @relation(fields: [produitId], references: [id_Produit])
+    produitId     String?        @db.ObjectId
+  }
 
 // Modele Produit
 model Produit {
@@ -102,8 +97,8 @@ model Offre {
   utilisateurId   String      @db.ObjectId
 
   // Une offre peut avoir une promotion.(1)
-  promotion   Promotion? @relation(fields: [promotionId], references: [id_Promotion])
-  promotionId String?    @db.ObjectId
+   // Relation inverse vers Promotion
+  promotion   Promotion?
 }
 
 // Modele Promotion
@@ -112,9 +107,12 @@ model Promotion {
   pourcentage  Float
   dateDebut    DateTime
   dateFin      DateTime
+  prixPromotionnel  Float?
 
-  // Relations
-  offre Offre[]           // Une promotion appliquer à une seul offre. (1)
+  offreId            String   @unique @db.ObjectId // Ajout de @unique et du type compatible MongoDB
+
+  // Relation vers Offre (clé étrangère)
+  offre              Offre    @relation(fields: [offreId], references: [id_Offre])
 }
 
 // Modele HistoriquePrix

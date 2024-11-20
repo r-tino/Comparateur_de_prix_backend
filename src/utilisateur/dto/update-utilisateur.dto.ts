@@ -24,4 +24,13 @@ export class UpdateUtilisateurDto {
   @IsOptional()
   @IsDateString()
   derniereConnexion?: string; // Ajoutez cette ligne
+  
+  @IsOptional()
+  @IsString()
+  photoProfil?: string; // Ajout de cette propriété pour résoudre l'erreur
+
+   
+  @IsOptional()
+  @IsString()
+  photoPublicId?: string; // Ajout de cette propriété pour résoudre l'erreur
 }

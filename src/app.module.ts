@@ -1,3 +1,4 @@
+// src/app.module.ts
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
@@ -10,6 +11,8 @@ import { ConfigModule } from '@nestjs/config';
 import { CategorieModule } from './categorie/categorie.module';
 import { ProduitModule } from './produit/produit.module';
 import { OffreModule } from './offre/offre.module';
+import { PromotionModule } from './promotion/promotion.module';
+import { ImageGeneratorService } from './utils/image-generator.service'; // Nouvel import
 
 @Module({
   imports: [
@@ -20,11 +23,14 @@ import { OffreModule } from './offre/offre.module';
     CategorieModule,
     ProduitModule,
     OffreModule,
+    PromotionModule,
   ],
   controllers: [AppController],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    ImageGeneratorService, // Ajout du service
   ],
+  exports: [ImageGeneratorService], // Exportation pour les autres modules
 })
 export class AppModule {}

@@ -1,27 +1,50 @@
-import { Controller, Post, Get, Patch, Delete, Body, Param, Query, Req, UseGuards, ParseIntPipe, UnauthorizedException, BadRequestException } from '@nestjs/common';
+// src/produit/produit.controller.ts
+import { Controller, Post, Get, Patch, Delete, Body, Param, Query, Req, UseGuards, UnauthorizedException, BadRequestException, UseInterceptors, UploadedFiles, UploadedFile } from '@nestjs/common';
 import { ProduitService } from './produit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
-import { CreateProduitDto } from './dto/create-produit.dto'; // DTO pour la validation
+import { CreateProduitDto } from './dto/create-produit.dto';
 import { UpdateProduitDto } from './dto/update-produit.dto';
+import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
+
 
 @Controller('produits')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProduitController {
   constructor(private readonly produitService: ProduitService) {}
 
-  // Création d'un produit (accessible uniquement aux vendeurs)
+  /**
+   * Endpoint pour créer un produit
+   * Gère les uploads de photos en regroupant les requêtes
+   */
   @Post()
   @Roles('Admin', 'Vendeur')
-  async creerProduit(@Body() createProduitDto: CreateProduitDto, @Req() req) {
-    const utilisateurId = req.user.userId; // Récupérer l'ID du vendeur authentifié
-    // Vérifier le rôle de l'utilisateur avant de créer un produit
-    if (req.user.role !== 'Vendeur' && req.user.role !== 'Admin') {
-      throw new UnauthorizedException("Seuls les vendeurs et les administrateurs peuvent créer des produits.");
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'photos', maxCount: 10 }]))
+  async creerProduit(
+    @Body() createProduitDto: CreateProduitDto,
+    @Req() req,
+    @UploadedFiles() files: { photos?: Express.Multer.File[] },
+  ) {
+    const utilisateurId = req.user.userId;
+
+    if (!['Vendeur', 'Admin'].includes(req.user.role)) {
+      throw new UnauthorizedException('Seuls les vendeurs et administrateurs peuvent créer des produits.');
     }
-    return this.produitService.creerProduit(createProduitDto, utilisateurId);
+
+    // Téléchargement unique des fichiers et photos locales
+    if (files?.photos?.length > 0) {
+      createProduitDto.photos = await Promise.all(
+        files.photos.map(async (file) => {
+          const result = await this.produitService.cloudinary.uploadLocalImage(file.path, 'produits');
+          return { url: result.url, couverture: false };
+        }),
+      );
+    }
+
+    return await this.produitService.creerProduit(createProduitDto, utilisateurId);
   }
+
 
   // Lecture des produits avec filtrage et pagination
   @Get()
@@ -79,8 +102,6 @@ export class ProduitController {
   }
 
   
-
-
   // Modification d'un produit (uniquement par le vendeur qui l'a créé)
   @Patch(':id')
   @Roles('Admin', 'Vendeur')

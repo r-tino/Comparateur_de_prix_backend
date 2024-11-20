@@ -1,18 +1,14 @@
+// src/produit/dto/create-produit.dto.ts
 import { IsString, IsNumber, IsBoolean, IsOptional, ValidateNested, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
-
-// Ajoutez l'importation de l'enum si nécessaire
-import { PhotoTypeEnum } from '@prisma/client'; // Assurez-vous d'importer votre enum ici
 
   class PhotoUpdateDto {
     @IsString()
     url: string;
-
+  
     @IsBoolean()
     couverture: boolean = false;
-
-    @IsEnum(PhotoTypeEnum)
-    type: PhotoTypeEnum;
+    
   }
   
   export class UpdateProduitDto {

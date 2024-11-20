@@ -31,6 +31,7 @@ export class OffreService {
           produit: {
             select: {
               nom_Produit: true, // Retourner uniquement le nom du produit
+              photos: { select: { url: true } },
             },
           },
           utilisateur: {
@@ -38,8 +39,13 @@ export class OffreService {
               nom_user: true, // Retourner uniquement le nom de l'utilisateur
             },
           },
+          promotion: { // Inclure la relation promotion pour obtenir son ID
+            select: { prixPromotionnel: true },
+          },
         },
       });
+
+      const photoCouverture = offre.produit.photos[0]?.url;
   
       return {
         message: 'Offre créée avec succès',
@@ -48,9 +54,10 @@ export class OffreService {
           prix: offre.prix,
           stock: offre.stock,
           dateExpiration: offre.dateExpiration,
-          nom_Produit: offre.produit.nom_Produit, // Afficher nom_Produit à la place de produitId
+          nom_Produit: offre.produit.nom_Produit, 
+          photoCouverture, // Afficher nom_Produit à la place de produitId
           nom_user: offre.utilisateur.nom_user,   // Afficher nom_user à la place de utilisateurId
-          promotionId: offre.promotionId,
+          promotionId: offre.promotion ? offre.promotion.prixPromotionnel : null, // Accéder à l'ID de la promotion
         },
       };
     } catch (error) {
@@ -58,7 +65,6 @@ export class OffreService {
       throw new Error("Erreur lors de la création de l'offre");
     }
   }
-  
 
   async findAllOffres(query: { page?: string, limit?: string, sortBy?: string, order?: 'asc' | 'desc', priceMin?: string, priceMax?: string,keyword?: string }) {
     const page = parseInt(query.page) || 1;
@@ -90,8 +96,16 @@ export class OffreService {
       take: limit,
       orderBy: { [sortBy]: order },
       include: {
-        produit: { select: { nom_Produit: true } },
+        produit: { 
+          select: { 
+            nom_Produit: true,
+            photos: { select: { url: true } }, 
+          },
+        },
         utilisateur: { select: { nom_user: true } },
+        promotion: { // Inclure la relation promotion pour obtenir son ID
+          select: { prixPromotionnel: true },
+        },
       },
     });
 
@@ -101,15 +115,23 @@ export class OffreService {
       total: totalCount,
       page,
       pageCount: Math.ceil(totalCount / limit),
-      data: offres.map((offre) => ({
-        id_Offre: offre.id_Offre,
-        prix: offre.prix,
-        stock: offre.stock,
-        dateExpiration: offre.dateExpiration,
-        nom_Produit: offre.produit.nom_Produit,
-        nom_user: offre.utilisateur.nom_user,
-        promotionId: offre.promotionId,
-      })),
+      data: offres.map((offre) => {
+        // Exemple de modification dans votre backend si nécessaire
+        const baseUrl = 'http://localhost:3001'; // Changez cela selon votre configuration
+        const photoCouverture = offre.produit.photos[0]?.url 
+        ? `${baseUrl}${offre.produit.photos[0].url}` 
+        : null;
+        return {
+          id_Offre: offre.id_Offre,
+          prix: offre.prix,
+          stock: offre.stock,
+          dateExpiration: offre.dateExpiration,
+          nom_Produit: offre.produit.nom_Produit,
+          photoCouverture,
+          nom_User: offre.utilisateur.nom_user,
+          promotionId: offre.promotion ? offre.promotion.prixPromotionnel : null,
+        };
+      }),
     };
   }
 
@@ -117,8 +139,16 @@ export class OffreService {
     const offre = await this.prisma.offre.findUnique({
       where: { id_Offre: id },
       include: {
-        produit: { select: { nom_Produit: true } },
+        produit: { 
+          select: { 
+            nom_Produit: true,
+            photos: { select: { url: true } }, 
+          }, 
+        },
         utilisateur: { select: { nom_user: true } },
+        promotion: { // Inclure la relation promotion pour obtenir son ID
+          select: { prixPromotionnel: true },
+        },
       },
     });
 
@@ -126,14 +156,17 @@ export class OffreService {
       throw new NotFoundException('Offre non trouvée');
     }
 
+    const photoCouverture = offre.produit.photos[0]?.url;
+
     return {
       id_Offre: offre.id_Offre,
       prix: offre.prix,
       stock: offre.stock,
       dateExpiration: offre.dateExpiration,
       nom_Produit: offre.produit.nom_Produit,
+      photoCouverture,
       nom_user: offre.utilisateur.nom_user,
-      promotionId: offre.promotionId,
+      promotionId: offre.promotion ? offre.promotion.prixPromotionnel : null, // Accéder à l'ID de la promotion
     };
   }
 
@@ -154,10 +187,21 @@ export class OffreService {
       where: { id_Offre: id },
       data: updateOffreDto,
       include: {
-        produit: { select: { nom_Produit: true } },
+        produit: { 
+          select: { 
+            nom_Produit: true,
+            photos: { select: { url: true } }, 
+          }, 
+        },
         utilisateur: { select: { nom_user: true } },
+        promotion: { // Inclure la relation promotion pour obtenir son ID
+          select: { prixPromotionnel: true },
+        },
       },
     });
+
+
+    const photoCouverture = updatedOffre.produit.photos[0]?.url;
 
     return {
       message: 'Offre mise à jour avec succès',
@@ -167,8 +211,9 @@ export class OffreService {
         stock: updatedOffre.stock,
         dateExpiration: updatedOffre.dateExpiration,
         nom_Produit: updatedOffre.produit.nom_Produit,
+        photoCouverture,
         nom_user: updatedOffre.utilisateur.nom_user,
-        promotionId: updatedOffre.promotionId,
+        promotionId: updatedOffre.promotion ? updatedOffre.promotion.prixPromotionnel : null, // Accéder à l'ID de la promotion
       },
     };
   }

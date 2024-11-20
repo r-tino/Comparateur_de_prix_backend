@@ -7,7 +7,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 
-@Controller('offres')
+@Controller('api/offres') // Ajoutez 'api' pour un préfixe d'URL complet
 export class OffreController {
   constructor(private readonly offreService: OffreService) {}
 

@@ -1,18 +1,18 @@
-import { IsString, IsNumber, IsBoolean, IsOptional, ValidateNested, ArrayMinSize, IsEnum } from 'class-validator';
+// src/produit/dto/create-produit.dto.ts
+import { IsString, IsNumber, IsBoolean, IsOptional, ValidateNested, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
-
-// Ajoutez l'importation de l'enum si nécessaire
-import { PhotoTypeEnum } from '@prisma/client'; // Assurez-vous d'importer votre enum ici
 
 class PhotoDto {
   @IsString()
   url: string;
 
   @IsBoolean()
-  couverture: boolean = false; // Assurez-vous que 'couverture' est toujours défini
+  @IsOptional()
+  couverture?: boolean = false; // Défini comme optionnel avec une valeur par défaut
 
-  @IsEnum(PhotoTypeEnum)
-  type: PhotoTypeEnum;
+  @IsString()
+  @IsOptional()
+  localPath?: string; // Propriété optionnelle pour gérer les chemins locaux
 }
 
 export class CreateProduitDto {
@@ -26,10 +26,12 @@ export class CreateProduitDto {
   prixInitial: number;
 
   @IsBoolean()
-  disponibilite: boolean;
+  @IsOptional()
+  disponibilite?: boolean = true; // Champ optionnel avec valeur par défaut
 
   @IsString()
-  categorieId: string;
+  @IsOptional()
+  categorieId?: string;
 
   @ValidateNested({ each: true })
   @Type(() => PhotoDto)
