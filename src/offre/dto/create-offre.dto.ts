@@ -1,10 +1,12 @@
 // src/offres/dto/create-offre.dto.ts
-import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
 
 export class CreateOffreDto {
   @IsNotEmpty()
   @IsNumber()
-  prix: number;
+  @IsPositive()
+  @Min(0.01, { message: 'Le prix doit être supérieur à zéro' })
+  prixOffre: number;
 
   @IsNotEmpty()
   @IsNumber()

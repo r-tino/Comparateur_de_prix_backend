@@ -1,15 +1,25 @@
 // src/promotion/promotion.service.ts
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
 import { UpdatePromotionDto } from './dto/update-promotion.dto';
+import { HistoriquePrixService } from 'src/historique-prix/historique-prix.service'; // Injection du service HistoriquePrix
+import { TypePrixEnum } from '@prisma/client';
 
 @Injectable()
 export class PromotionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly historiquePrixService: HistoriquePrixService, // Injection du service HistoriquePrix
+  ) {}
 
   // Créer une promotion avec calcul automatique du prix promotionnel
   async create(data: CreatePromotionDto, userId: string) {
+    // Validation des dates
+    if (data.dateDebut >= data.dateFin) {
+      throw new BadRequestException("La date de début doit être antérieure à la date de fin.");
+    }
+
     const isOwner = await this.checkOfferOwnership(data.offreId, userId);
     if (!isOwner) {
       throw new ForbiddenException("Vous n'êtes pas autorisé à créer une promotion pour cette offre.");
@@ -19,7 +29,7 @@ export class PromotionService {
     const offre = await this.prisma.offre.findUnique({
       where: { id_Offre: data.offreId },
       select: {
-        prix: true,
+        prixOffre: true,
         produit: {
           select: {
             nom_Produit: true,
@@ -37,8 +47,24 @@ export class PromotionService {
     }
 
     // Calcul du prix promotionnel en appliquant le pourcentage de réduction
-    const prixPromotionnel = offre.prix - (offre.prix * data.pourcentage) / 100;
+    const prixPromotionnel = offre.prixOffre - (offre.prixOffre * data.pourcentage) / 100;
 
+    // Enregistrer l'historique du changement de prix
+    try {
+      await this.historiquePrixService.enregistrerHistoriquePrix(
+        data.offreId,
+        offre.prixOffre,
+        prixPromotionnel,
+        TypePrixEnum.PROMOTION,
+        userId // Ajout de l'utilisateur
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Erreur lors de l’enregistrement de l’historique des prix : ${error.message}`,
+      );
+    }
+
+    // Enregistrer le Promotion
     try {
       const promotion = await this.prisma.promotion.create({
         data: {
@@ -70,7 +96,7 @@ export class PromotionService {
         },
       };
     } catch (error) {
-      throw new Error(`Erreur lors de la création de la promotion: ${error.message}`);
+      throw new InternalServerErrorException(`Erreur lors de la création de la promotion: ${error.message}`);
     }
   }
 
@@ -144,7 +170,6 @@ export class PromotionService {
     }
   }
 
-  // Mettre à jour une promotion avec recalcul automatique du prix promotionnel
  // Mettre à jour une promotion avec recalcul automatique du prix promotionnel
  async update(id: string, data: UpdatePromotionDto, userId: string) {
   const promotion = await this.prisma.promotion.findUnique({
@@ -153,7 +178,7 @@ export class PromotionService {
       offre: {
         select: {
           id_Offre: true,
-          prix: true,
+          prixOffre: true,
           produit: { select: { nom_Produit: true, photos: { select: { url: true } } } },
           utilisateur: { select: { nom_user: true } },
         },
@@ -165,13 +190,34 @@ export class PromotionService {
     throw new NotFoundException('Promotion non trouvée.');
   }
 
+  // Validation des dates
+  if (data.dateDebut && data.dateFin && data.dateDebut >= data.dateFin) {
+    throw new BadRequestException("La date de début doit être antérieure à la date de fin.");
+  }
+
   const isOwner = await this.checkOfferOwnership(promotion.offre.id_Offre, userId);
   if (!isOwner) {
     throw new ForbiddenException("Vous n'êtes pas autorisé à mettre à jour cette promotion.");
   }
 
-  const prixPromotionnel = promotion.offre.prix - (promotion.offre.prix * data.pourcentage) / 100;
+  const prixPromotionnel = promotion.offre.prixOffre - (promotion.offre.prixOffre * data.pourcentage) / 100;
 
+  // Enregistrer l'historique du changement de prix
+  try {
+    await this.historiquePrixService.enregistrerHistoriquePrix(
+      promotion.offre.id_Offre,
+      promotion.offre.prixOffre,
+      prixPromotionnel,
+      TypePrixEnum.PROMOTION,
+      userId // Ajout de l'utilisateur
+    );
+  } catch (error) {
+    throw new InternalServerErrorException(
+      `Erreur lors de l’enregistrement de l’historique des prix : ${error.message}`,
+    );
+  }
+
+  // Enregistrer la modification du Promotion
   try {
     const updatedPromotion = await this.prisma.promotion.update({
       where: { id_Promotion: id },
@@ -186,6 +232,7 @@ export class PromotionService {
     return {
       message: 'Promotion mise à jour avec succès',
       promotionId: updatedPromotion.id_Promotion,
+      prixPromotionnel: updatedPromotion.prixPromotionnel,
       offre: {
         produitNom: promotion.offre.produit.nom_Produit,
         photoCouverture,

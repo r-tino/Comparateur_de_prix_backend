@@ -1,5 +1,5 @@
 // src/produit/produit.controller.ts
-import { Controller, Post, Get, Patch, Delete, Body, Param, Query, Req, UseGuards, UnauthorizedException, BadRequestException, UseInterceptors, UploadedFiles, UploadedFile } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param, Query, Req, UseGuards, UnauthorizedException, BadRequestException, UseInterceptors, UploadedFiles, UploadedFile, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { ProduitService } from './produit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -7,12 +7,17 @@ import { RolesGuard } from '../auth/roles.guard';
 import { CreateProduitDto } from './dto/create-produit.dto';
 import { UpdateProduitDto } from './dto/update-produit.dto';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import { HistoriquePrixService } from 'src/historique-prix/historique-prix.service';
+import { TypePrixEnum } from '@prisma/client';
 
 
 @Controller('produits')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProduitController {
-  constructor(private readonly produitService: ProduitService) {}
+  constructor(
+      private readonly produitService: ProduitService,
+      private readonly historiquePrixService: HistoriquePrixService, // Injection du service
+  ) {}
 
   /**
    * Endpoint pour créer un produit
@@ -106,10 +111,72 @@ export class ProduitController {
   @Patch(':id')
   @Roles('Admin', 'Vendeur')
   async modifierProduit(@Param('id') id: string, @Body() data: UpdateProduitDto, @Req() req) {
-    const utilisateurId  = req.user.id;
-    const role = req.user.role; // Récupérer le rôle de l'utilisateur
+    console.log('ID utilisateur connecté dans le contrôleur:', req.user?.userId);  // Utilisez `userId` ici
+    console.log('Rôle utilisateur dans le contrôleur:', req.user?.role);
+    
+    const utilisateurId = req.user?.userId;  // Utilisez `userId` et non `id_User`
+    const role = req.user?.role;
+
+    // Vérification de l'ID du produit
+    const produit = await this.produitService.findOneProduit(id);
+    console.log('ID utilisateur du produit:', produit.utilisateurId);  // Vérifiez l'ID utilisateur du produit
+
+    // Vérification des droits de modification
+    if (produit.utilisateurId !== utilisateurId && role !== 'Admin') {
+      throw new ForbiddenException('Accès non autorisé');
+    }
+
     return await this.produitService.modifierProduit(id, data, utilisateurId, role);
   }
+
+  /**
+   * Endpoint pour récupérer l'historique des prix d'un produit
+   * @param produitId ID du produit
+   * @param page Numéro de la page pour la pagination
+   * @param limit Nombre d'éléments par page
+   * @param typePrix Type de prix (produit, offre, promotion)
+   */
+  @Get(':produitId/historique-prix')
+  @Roles('Admin', 'Vendeur') // Définition des rôles autorisés
+  async lireHistoriquePrix(
+    @Param('produitId') produitId: string, // Récupération de l'ID du produit
+    @Query('page') page = '1', // Valeur par défaut pour la page
+    @Query('limit') limit = '10', // Valeur par défaut pour la limite
+    @Query('typePrix') typePrix: TypePrixEnum, // Type de prix (produit, offre, promotion)
+  ) {
+    console.log(`Requête reçue: produitId=${produitId}, page=${page}, limit=${limit}, typePrix=${typePrix}`);
+
+    // Conversion des paramètres
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+
+    // Validation des paramètres de pagination
+    if (isNaN(pageNumber) || pageNumber <= 0) {
+      console.error('Paramètre "page" invalide:', page);
+      throw new BadRequestException('Le paramètre "page" doit être un nombre positif.');
+    }
+    if (isNaN(limitNumber) || limitNumber <= 0) {
+      console.error('Paramètre "limit" invalide:', limit);
+      throw new BadRequestException('Le paramètre "limit" doit être un nombre positif.');
+    }
+
+    // Validation du typePrix
+    if (!Object.values(TypePrixEnum).includes(typePrix)) {
+      console.error('Paramètre "typePrix" invalide:', typePrix);
+      throw new BadRequestException('Le paramètre "typePrix" est invalide.');
+    }
+
+    try {
+      // Appel au service
+      const result = await this.historiquePrixService.lireHistoriquePrix(produitId, typePrix, pageNumber, limitNumber);
+      console.log(`Résultat du service:`, result);
+      return result;
+    } catch (error) {
+      console.error('Erreur lors de la récupération de l’historique des prix:', error.message);
+      throw new InternalServerErrorException('Erreur lors de la récupération de l’historique des prix.');
+    }
+  }
+
 
   // Suppression d'un produit (uniquement par le vendeur qui l'a créé)
   @Delete(':id')

@@ -32,6 +32,8 @@ model Utilisateur {
   produits         Produit[]                  // Un utilisateur (vendeur/admin) peut publier plusieurs produits.
   note             Note[]                     // Un utilisateur peut attribuer plusieurs notes.(0...*)
   offres           Offre[]                    // Un utilisateur peut proposer plusieurs offres (en tant que vendeur/admin).
+
+  HistoriquePrix HistoriquePrix[]
 }
 
 enum RoleEnum {
@@ -82,7 +84,7 @@ model Produit {
 // Modele offres
 model Offre {
   id_Offre       String    @id @default(auto()) @map("_id") @db.ObjectId
-  prix           Float
+  prixOffre      Float
   stock          Int
   dateExpiration DateTime?
 
@@ -99,6 +101,8 @@ model Offre {
   // Une offre peut avoir une promotion.(1)
    // Relation inverse vers Promotion
   promotion   Promotion?
+
+  HistoriquePrix HistoriquePrix[]
 }
 
 // Modele Promotion
@@ -113,19 +117,36 @@ model Promotion {
 
   // Relation vers Offre (clé étrangère)
   offre              Offre    @relation(fields: [offreId], references: [id_Offre])
+
+  HistoriquePrix HistoriquePrix[]
 }
 
 // Modele HistoriquePrix
 model HistoriquePrix {
-  id_HistoriquePrix String   @id @default(auto()) @map("_id") @db.ObjectId
-  prix              Float
-  dateChangement    DateTime  
+  id_HistoriquePrix      String   @id @default(auto()) @map("_id") @db.ObjectId
+  ancienPrix             Float? 
+  prixModif              Float
+  typePrix               TypePrixEnum
+  sourceId               String   @db.ObjectId // Référence soit un produit, une offre ou une promotion
+  dateChangement         DateTime @default(now()) // Géré automatiquement avec la date actuelle
 
-  // Relation avec Produit
 
-  // Un historique des prix est lié à une produit.(1)
-  produit   Produit @relation(fields: [produitId], references: [id_Produit])
-  produitId String  @db.ObjectId
+ // Relation inverse avec Produit
+  produit           Produit?   @relation(fields: [sourceId], references: [id_Produit])
+  offre             Offre?     @relation(fields: [sourceId], references: [id_Offre])
+  promotion         Promotion? @relation(fields: [sourceId], references: [id_Promotion])
+
+  utilisateur      Utilisateur? @relation(fields: [utilisateurId], references: [id_User]) // Relation ajoutée
+  utilisateurId    String?     @db.ObjectId// Ajout de la clé étrangère
+
+  // Enum pour différencier les sources
+  @@index([sourceId, typePrix]) // Index pour des requêtes plus efficaces
+}
+
+enum TypePrixEnum {
+  PRODUIT
+  OFFRE
+  PROMOTION
 }
 
 // Modele Note

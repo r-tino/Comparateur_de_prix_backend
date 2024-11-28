@@ -1,17 +1,22 @@
 // src/offre/offre.service.ts
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOffreDto } from './dto/create-offre.dto';
 import { UpdateOffreDto } from './dto/update-offre.dto';
+import { HistoriquePrixService } from 'src/historique-prix/historique-prix.service';
+import { TypePrixEnum } from '@prisma/client';
 
 @Injectable()
 export class OffreService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly historiquePrixService: HistoriquePrixService, // Injection du service HistoriquePrix
+  ) {}
 
   async createOffre(createOffreDto: CreateOffreDto, utilisateurId: string) {
     try {
       console.log('Données reçues pour la création de l\'offre:', {
-        prix: createOffreDto.prix,
+        prix: createOffreDto.prixOffre,
         stock: createOffreDto.stock,
         dateExpiration: createOffreDto.dateExpiration,
         produitId: createOffreDto.produitId,
@@ -21,7 +26,7 @@ export class OffreService {
       // Créer l'offre dans la base de données
       const offre = await this.prisma.offre.create({
         data: {
-          prix: createOffreDto.prix,
+          prixOffre: createOffreDto.prixOffre,
           stock: createOffreDto.stock,
           dateExpiration: createOffreDto.dateExpiration,
           produitId: createOffreDto.produitId,
@@ -51,7 +56,7 @@ export class OffreService {
         message: 'Offre créée avec succès',
         offre: {
           id_Offre: offre.id_Offre,
-          prix: offre.prix,
+          prixOffre: offre.prixOffre,
           stock: offre.stock,
           dateExpiration: offre.dateExpiration,
           nom_Produit: offre.produit.nom_Produit, 
@@ -76,7 +81,7 @@ export class OffreService {
     const keyword = query.keyword || '';
 
     const whereConditions: any = {
-      prix: {
+      prixOffre: {
         ...(priceMin !== undefined && { gte: priceMin }),
         ...(priceMax !== undefined && { lte: priceMax })
       },
@@ -123,7 +128,7 @@ export class OffreService {
         : null;
         return {
           id_Offre: offre.id_Offre,
-          prix: offre.prix,
+          prixOffre: offre.prixOffre,
           stock: offre.stock,
           dateExpiration: offre.dateExpiration,
           nom_Produit: offre.produit.nom_Produit,
@@ -145,7 +150,12 @@ export class OffreService {
             photos: { select: { url: true } }, 
           }, 
         },
-        utilisateur: { select: { nom_user: true } },
+        utilisateur: { 
+          select: { 
+            id_User: true, // Ajoutez cette ligne
+            nom_user: true, 
+          },
+         },
         promotion: { // Inclure la relation promotion pour obtenir son ID
           select: { prixPromotionnel: true },
         },
@@ -160,63 +170,100 @@ export class OffreService {
 
     return {
       id_Offre: offre.id_Offre,
-      prix: offre.prix,
+      prixOffre: offre.prixOffre,
       stock: offre.stock,
       dateExpiration: offre.dateExpiration,
       nom_Produit: offre.produit.nom_Produit,
       photoCouverture,
+      utilisateurId: offre.utilisateurId,
       nom_user: offre.utilisateur.nom_user,
       promotionId: offre.promotion ? offre.promotion.prixPromotionnel : null, // Accéder à l'ID de la promotion
     };
   }
 
   async updateOffre(id: string, updateOffreDto: UpdateOffreDto, utilisateurId: string) {
-    // Récupère l'offre et vérifie le propriétaire
-    const offre = await this.prisma.offre.findUnique({
-      where: { id_Offre: id },
-      select: { utilisateurId: true },
-    });
+    try {
+      // Récupère l'offre et vérifie le propriétaire
+      const offre = await this.prisma.offre.findUnique({
+        where: { id_Offre: id },
+        select: { utilisateurId: true , prixOffre: true }, // Inclure l'ancien prix
+      });
+  
+      if (!offre) {
+        throw new NotFoundException("Offre non trouvée");
+      }
+  
+      if (offre.utilisateurId !== utilisateurId) {
+        throw new ForbiddenException("Vous n'êtes pas autorisé à modifier cette offre");
+      }
 
-    if (!offre) throw new NotFoundException("Offre non trouvée");
-    if (offre.utilisateurId !== utilisateurId) {
-      throw new ForbiddenException("Vous n'êtes pas autorisé à modifier cette offre");
+      // Vérification des changements de prix
+      const { prixOffre } = updateOffreDto; // Nouveau prix fourni dans la mise à jour
+      if (prixOffre !== undefined && prixOffre !== offre.prixOffre) {
+        // Enregistrer l'historique du changement de prix
+        try {
+          await this.historiquePrixService.enregistrerHistoriquePrix(
+            id,
+            offre.prixOffre,
+            prixOffre,
+            TypePrixEnum.OFFRE,
+            utilisateurId // Ajout de l'utilisateur
+          );
+        } catch (error) {
+          throw new InternalServerErrorException(
+            `Erreur lors de l’enregistrement de l’historique des prix : ${error.message}`,
+          );
+        }
+      }
+  
+      // Met à jour l'offre si l'utilisateur est le propriétaire
+      const updatedOffre = await this.prisma.offre.update({
+        where: { id_Offre: id },
+        data: updateOffreDto,
+        include: {
+          produit: {
+            select: {
+              nom_Produit: true,
+              photos: { select: { url: true } },
+            },
+          },
+          utilisateur: { select: { nom_user: true } },
+          promotion: { // Inclure la relation promotion pour obtenir son ID
+            select: { prixPromotionnel: true },
+          },
+        },
+      });
+
+      const modificateur = await this.prisma.utilisateur.findUnique({
+        where: { id_User: utilisateurId },
+        select: { nom_user: true },
+      });
+  
+      const photoCouverture = updatedOffre.produit.photos[0]?.url;
+  
+      return {
+        message: 'Offre mise à jour avec succès',
+        offre: {
+          id_Offre: updatedOffre.id_Offre,
+          prix: updatedOffre.prixOffre,
+          stock: updatedOffre.stock,
+          dateExpiration: updatedOffre.dateExpiration,
+          nom_Produit: updatedOffre.produit.nom_Produit,
+          photoCouverture,
+          nom_user: updatedOffre.utilisateur.nom_user,
+          modifiePar: modificateur?.nom_user || null, // Ajout de l'utilisateur ayant effectué la modification
+          promotionId: updatedOffre.promotion ? updatedOffre.promotion.prixPromotionnel : null,
+        },
+      };
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour de l’offre:', error.message || error);
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+        throw error; // Propager les exceptions spécifiques
+      }
+      throw new InternalServerErrorException("Une erreur est survenue lors de la mise à jour de l’offre.");
     }
-
-    // Met à jour l'offre si l'utilisateur est le propriétaire
-    const updatedOffre = await this.prisma.offre.update({
-      where: { id_Offre: id },
-      data: updateOffreDto,
-      include: {
-        produit: { 
-          select: { 
-            nom_Produit: true,
-            photos: { select: { url: true } }, 
-          }, 
-        },
-        utilisateur: { select: { nom_user: true } },
-        promotion: { // Inclure la relation promotion pour obtenir son ID
-          select: { prixPromotionnel: true },
-        },
-      },
-    });
-
-
-    const photoCouverture = updatedOffre.produit.photos[0]?.url;
-
-    return {
-      message: 'Offre mise à jour avec succès',
-      offre: {
-        id_Offre: updatedOffre.id_Offre,
-        prix: updatedOffre.prix,
-        stock: updatedOffre.stock,
-        dateExpiration: updatedOffre.dateExpiration,
-        nom_Produit: updatedOffre.produit.nom_Produit,
-        photoCouverture,
-        nom_user: updatedOffre.utilisateur.nom_user,
-        promotionId: updatedOffre.promotion ? updatedOffre.promotion.prixPromotionnel : null, // Accéder à l'ID de la promotion
-      },
-    };
   }
+  
 
   async deleteOffre(id: string, utilisateurId: string) {
     // Vérifie le propriétaire avant la suppression
@@ -229,6 +276,11 @@ export class OffreService {
     if (offre.utilisateurId !== utilisateurId) {
       throw new ForbiddenException("Vous n'êtes pas autorisé à supprimer cette offre");
     }
+
+    // Supprimer l'historique des prix lié à cette offre
+    await this.prisma.historiquePrix.deleteMany({
+      where: { sourceId: id, typePrix: TypePrixEnum.OFFRE },
+    });
 
     // Supprime l'offre si l'utilisateur est le propriétaire
     await this.prisma.offre.delete({ where: { id_Offre: id } });
