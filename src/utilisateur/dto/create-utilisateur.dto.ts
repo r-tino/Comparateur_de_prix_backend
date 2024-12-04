@@ -1,4 +1,4 @@
-import { IsString, IsEmail, MinLength, MaxLength, IsEnum, IsOptional } from 'class-validator';
+import { IsString, IsEmail, MinLength, MaxLength, IsEnum, IsOptional, IsPhoneNumber } from 'class-validator';
 import { RoleEnum } from '@prisma/client';
 
 export class CreateUtilisateurDto {
@@ -6,6 +6,13 @@ export class CreateUtilisateurDto {
   @MinLength(3, { message: 'Le nom d\'utilisateur doit comporter au moins 3 caractères' })
   @MaxLength(20, { message: 'Le nom d\'utilisateur ne peut pas dépasser 20 caractères' })
   nom_user: string;
+
+  @IsString()
+  adress: string;
+
+  @IsString()
+  @IsPhoneNumber('MG', { message: 'Numéro de téléphone invalide pour Madagascar' }) // Valide un numéro de téléphone au format malgache
+  contact: string; // Ajout du champ 'contact'
 
   @IsEmail({}, { message: 'Email invalide' })
   email: string;

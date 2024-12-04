@@ -155,6 +155,8 @@ export class UtilisateurService {
     await this.prisma.utilisateur.create({
       data: {
         nom_user: data.nom_user,
+        adress: data.adress,
+        contact: data.contact, 
         email: data.email,
         motDePasse: hashedPassword,
         role,
