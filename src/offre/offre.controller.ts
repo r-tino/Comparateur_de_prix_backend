@@ -4,7 +4,6 @@ import { OffreService } from './offre.service';
 import { CreateOffreDto } from './dto/create-offre.dto';
 import { UpdateOffreDto } from './dto/update-offre.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { HistoriquePrixService } from 'src/historique-prix/historique-prix.service';
 import { TypePrixEnum } from '@prisma/client';

@@ -17,8 +17,10 @@ datasource db {
 model Utilisateur {
   id_User           String    @id @default(auto()) @map("_id") @db.ObjectId
   nom_user          String
+  adress            String
   email             String    @unique
   motDePasse        String
+  contact           String
   role              RoleEnum
   dateCreation      DateTime  @default(now())
   derniereConnexion DateTime?
@@ -178,7 +180,7 @@ model Categorie {
 
 // Modele Commentaire
 model Commentaire {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  id_Commentaire  String   @id @default(auto()) @map("_id") @db.ObjectId
   contenu         String
   dateCommentaire DateTime  @default(now())
 

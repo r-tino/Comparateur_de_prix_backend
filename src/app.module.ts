@@ -13,6 +13,7 @@ import { ProduitModule } from './produit/produit.module';
 import { OffreModule } from './offre/offre.module';
 import { PromotionModule } from './promotion/promotion.module';
 import { ImageGeneratorService } from './utils/image-generator.service'; // Nouvel import
+import { NoteModule } from './note/note.module'; // Import du module Note
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ImageGeneratorService } from './utils/image-generator.service'; // Nouv
     ProduitModule,
     OffreModule,
     PromotionModule,
+    NoteModule,   // Ajoutez NoteModule ici
   ],
   controllers: [AppController],
   providers: [
