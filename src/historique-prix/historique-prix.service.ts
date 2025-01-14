@@ -89,7 +89,7 @@ export class HistoriquePrixService {
             utilisateur: true, // Inclure la relation utilisateur
           },
         }),
-        this.prisma.historiquePrix.count({ where: { sourceId, typePrix } }),
+        this.prisma.historiquePrix.count({ where: { sourceId: sourceId, typePrix } }),
       ]);
   
       console.log(`Données récupérées: historique=${historique.length}, total=${total}`);

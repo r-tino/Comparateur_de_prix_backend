@@ -95,6 +95,7 @@ export class OffreController {
    */
   @Get(':offreId/historique-prix')
   @Roles('Vendeur', 'Admin')
+  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour GET historique-prix
   async lireHistoriquePrix(
     @Param('offreId') offreId: string,
     @Query('page') page = '1',

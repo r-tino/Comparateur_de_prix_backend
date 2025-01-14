@@ -5,9 +5,10 @@ import { CommentaireController } from './commentaire.controller';
 import { PrismaModule } from '../prisma/prisma.module'; // Si vous utilisez Prisma pour MongoDB
 import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { NotificationModule } from '../notification/notification.module'; // Importer le module Notification
 
 @Module({
-  imports: [AuthModule, PrismaModule], // Ajouter les modules nécessaires, par exemple Prisma ou d'autres dépendances
+  imports: [AuthModule, PrismaModule, NotificationModule], // Ajout de NotificationModule ici
   controllers: [CommentaireController],
   providers: [CommentaireService, JwtAuthGuard],
 })

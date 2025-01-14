@@ -12,7 +12,7 @@ import { TypePrixEnum } from '@prisma/client';
 
 
 @Controller('produits')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(RolesGuard)  // Retirer JwtAuthGuard ici
 export class ProduitController {
   constructor(
       private readonly produitService: ProduitService,
@@ -23,8 +23,11 @@ export class ProduitController {
    * Endpoint pour créer un produit
    * Gère les uploads de photos en regroupant les requêtes
    */
+
+  // Gardez JwtAuthGuard pour les routes qui en ont besoin
   @Post()
   @Roles('Admin', 'Vendeur')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileFieldsInterceptor([{ name: 'photos', maxCount: 10 }]))
   async creerProduit(
     @Body() createProduitDto: CreateProduitDto,
@@ -110,6 +113,7 @@ export class ProduitController {
   // Modification d'un produit (uniquement par le vendeur qui l'a créé)
   @Patch(':id')
   @Roles('Admin', 'Vendeur')
+  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour POST
   async modifierProduit(@Param('id') id: string, @Body() data: UpdateProduitDto, @Req() req) {
     console.log('ID utilisateur connecté dans le contrôleur:', req.user?.userId);  // Utilisez `userId` ici
     console.log('Rôle utilisateur dans le contrôleur:', req.user?.role);
@@ -138,6 +142,7 @@ export class ProduitController {
    */
   @Get(':produitId/historique-prix')
   @Roles('Admin', 'Vendeur') // Définition des rôles autorisés
+  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour POST
   async lireHistoriquePrix(
     @Param('produitId') produitId: string, // Récupération de l'ID du produit
     @Query('page') page = '1', // Valeur par défaut pour la page
@@ -181,6 +186,7 @@ export class ProduitController {
   // Suppression d'un produit (uniquement par le vendeur qui l'a créé)
   @Delete(':id')
   @Roles('Admin', 'Vendeur')
+  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour POST
   async supprimerProduit(@Param('id') id: string, @Req() req) {
     const utilisateurId = req.user.userId;  // Assurez-vous que l'ID de l'utilisateur est correct
     const role = req.user.role;  // Récupérez le rôle de l'utilisateur depuis `req.user`

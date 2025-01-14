@@ -10,5 +10,6 @@ import { HistoriquePrixService } from 'src/historique-prix/historique-prix.servi
   imports: [AuthModule], // Ajoutez AuthModule ici
   controllers: [OffreController],
   providers: [OffreService, PrismaService, HistoriquePrixService, JwtAuthGuard],
+  exports: [OffreService],
 })
 export class OffreModule {}

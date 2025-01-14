@@ -103,6 +103,7 @@ export class OffreService {
       include: {
         produit: { 
           select: { 
+            id_Produit: true,
             nom_Produit: true,
             photos: { select: { url: true } }, 
           },
@@ -131,6 +132,7 @@ export class OffreService {
           prixOffre: offre.prixOffre,
           stock: offre.stock,
           dateExpiration: offre.dateExpiration,
+          id_produit: offre.produit.id_Produit,
           nom_Produit: offre.produit.nom_Produit,
           photoCouverture,
           nom_User: offre.utilisateur.nom_user,

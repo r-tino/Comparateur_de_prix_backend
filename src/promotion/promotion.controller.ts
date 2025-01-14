@@ -11,7 +11,7 @@ import { HistoriquePrixService } from 'src/historique-prix/historique-prix.servi
 import { TypePrixEnum } from '@prisma/client';
 
 @Controller('promotions')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(RolesGuard)
 export class PromotionController {
   constructor(
     private readonly promotionService: PromotionService,
@@ -19,6 +19,7 @@ export class PromotionController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour POST
   @Roles('Admin', 'Vendeur')  // Seuls les rôles Admin et Vendeur peuvent créer des promotions
   async create(@Body() createPromotionDto: CreatePromotionDto, @Req() req) {
     console.log("User data in request:", req.user); // Ajouter ce log pour déboguer
@@ -52,6 +53,7 @@ export class PromotionController {
 
   @Patch(':id')
   @Roles('Admin', 'Vendeur')  // Seuls les rôles Admin et Vendeur peuvent mettre à jour des promotions
+  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour PATCH
   async update(@Param('id') id: string, @Body() updatePromotionDto: UpdatePromotionDto, @Req() req) {
     try {
       const { user } = req;
@@ -69,6 +71,7 @@ export class PromotionController {
 
   @Delete(':id')
   @Roles('Admin', 'Vendeur') // Utilisation directe des rôles// Seuls les rôles Admin et Vendeur peuvent supprimer des promotions
+  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour DELETE
   async remove(@Param('id') id: string, @Req() req) {
     try {
     const { user } = req;
@@ -85,6 +88,7 @@ export class PromotionController {
    */
   @Get(':promotionId/historique-prix')
   @Roles('Admin', 'Vendeur')
+  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour GET historique-prix
   async lireHistoriquePrix(
     @Param('promotionId') promotionId: string,
     @Query('page') page = '1',

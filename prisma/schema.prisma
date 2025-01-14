@@ -170,13 +170,15 @@ model Note {
 
 // Modele Categorie
 model Categorie {
-  id_Categorie String @id @default(auto()) @map("_id") @db.ObjectId
-  nomCategorie String
-  isActive     Boolean  @default(true) // Ajout du champ isActive
+  id_Categorie   String   @id @default(auto()) @map("_id") @db.ObjectId
+  nomCategorie   String
+  isActive       Boolean  @default(true)
+  attributs      Json?
+  typeCategory   String?  
 
-  // Relation avec les Produits
-  produits Produit[]            // Une catégorie peut regrouper plusieurs produits.(0...*)
+  produits       Produit[] // Une catégorie peut regrouper plusieurs produits.(0...*)
 }
+
 
 // Modele Commentaire
 model Commentaire {
@@ -214,4 +216,5 @@ enum TypeNotifEnum {
   Promotion
   Commentaire
   Autre
+  PRISE
 }

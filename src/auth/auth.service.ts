@@ -1,3 +1,5 @@
+// src/auth/auth.service.ts
+
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { UtilisateurService } from '../utilisateur/utilisateur.service';
 import { JwtService } from '@nestjs/jwt';

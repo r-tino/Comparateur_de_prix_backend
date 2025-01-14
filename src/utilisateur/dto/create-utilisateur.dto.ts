@@ -1,3 +1,5 @@
+// src/utilisateur/dto/create-utilisateur.dto.ts
+
 import { IsString, IsEmail, MinLength, MaxLength, IsEnum, IsOptional, IsPhoneNumber } from 'class-validator';
 import { RoleEnum } from '@prisma/client';
 
@@ -12,7 +14,7 @@ export class CreateUtilisateurDto {
 
   @IsString()
   @IsPhoneNumber('MG', { message: 'Numéro de téléphone invalide pour Madagascar' }) // Valide un numéro de téléphone au format malgache
-  contact: string; // Ajout du champ 'contact'
+  contact: string;
 
   @IsEmail({}, { message: 'Email invalide' })
   email: string;
@@ -30,5 +32,5 @@ export class CreateUtilisateurDto {
 
   @IsOptional()
   @IsString()
-  photoProfil?: string; // Ajout de cette propriété pour résoudre l'erreur
+  photoProfil?: string;
 }

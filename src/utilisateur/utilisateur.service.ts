@@ -12,7 +12,7 @@ import { UpdateUtilisateurDto } from './dto/update-utilisateur.dto';
 
 @Injectable() 
 export class UtilisateurService {
-  constructor(private readonly prisma: PrismaService, private readonly cloudinaryService: CloudinaryService,) {
+  constructor(private readonly prisma: PrismaService, private readonly cloudinaryService: CloudinaryService) {
     this.ensureUploadsDirectoryExists();
   }
 
@@ -20,52 +20,50 @@ export class UtilisateurService {
   private async ensureUploadsDirectoryExists() {
     const directoryPath = path.join('uploads', 'profiles');
     try {
-      await fsPromises.mkdir(directoryPath, { recursive: true }); // Utilisation de fsPromises pour éviter les erreurs
+      await fsPromises.mkdir(directoryPath, { recursive: true });
       console.log('Le dossier uploads/profiles a été créé avec succès.');
     } catch (error) {
       console.error('Erreur lors de la création du dossier uploads/profiles:', error);
     }
   }
 
-    // Téléverse la photo locale sur Cloudinary et retourne l'URL mise à jour
-    async handlePhoto(photo: string | Express.Multer.File): Promise<{ url: string; public_id: string }> {
-      if (typeof photo === 'string') {
-        if (photo.startsWith('http')) {
-          return { url: photo, public_id: '' }; // Si c'est une URL distante
-        } else {
-          // Téléversement de la photo locale sur Cloudinary
-          console.log(`Téléversement du fichier local: ${photo}`);
-          const uploadResult = await this.cloudinaryService.uploadLocalImage(photo, 'users/profiles');
-          console.log(`Téléversement réussi: URL - ${uploadResult.url}, Public ID - ${uploadResult.public_id}`);
-          return { url: uploadResult.url, public_id: uploadResult.public_id };
-        }
-      } else if (photo && photo.path) {
-        const uploadResult = await this.cloudinaryService.uploadLocalImage(photo.path, 'users/profiles');
+  // Téléverse la photo locale sur Cloudinary et retourne l'URL mise à jour
+  async handlePhoto(photo: string | Express.Multer.File): Promise<{ url: string; public_id: string }> {
+    if (typeof photo === 'string') {
+      if (photo.startsWith('http')) {
+        return { url: photo, public_id: '' }; // Si c'est une URL distante
+      } else {
+        // Téléversement de la photo locale sur Cloudinary
+        console.log(`Téléversement du fichier local: ${photo}`);
+        const uploadResult = await this.cloudinaryService.uploadLocalImage(photo, 'users/profiles');
+        console.log(`Téléversement réussi: URL - ${uploadResult.url}, Public ID - ${uploadResult.public_id}`);
         return { url: uploadResult.url, public_id: uploadResult.public_id };
       }
-      return { url: 'uploads/profiles/default.jpg', public_id: '' };
+    } else if (photo && photo.path) {
+      const uploadResult = await this.cloudinaryService.uploadLocalImage(photo.path, 'users/profiles');
+      return { url: uploadResult.url, public_id: uploadResult.public_id };
     }
+    return { url: '', public_id: '' }; // Retourner des valeurs vides si aucune photo n'est fournie
+  }
 
-    // Méthode pour nettoyer l'ancienne photo
-    private async nettoyerAnciennePhoto(photoUrl: string | null, publicId: string | null): Promise<void> {
-      try {
-        if (publicId) {
-          console.log(`Suppression de l'image sur Cloudinary avec Public ID : ${publicId}`);
-          await this.cloudinaryService.deleteImage(publicId);
-          console.log(`Image supprimée avec succès de Cloudinary.`);
-        }
-  
-        if (photoUrl && photoUrl.startsWith('uploads/') && fs.existsSync(photoUrl)) {
-          console.log(`Suppression du fichier local : ${photoUrl}`);
-          await fsPromises.unlink(photoUrl); // Utilisation de fsPromises.unlink pour éviter des erreurs de callback
-          console.log(`Fichier local supprimé avec succès.`);
-        }
-      } catch (error) {
-        console.error(`Erreur lors du nettoyage de l'ancienne photo : ${error.message}`);
+  // Méthode pour nettoyer l'ancienne photo
+  private async nettoyerAnciennePhoto(photoUrl: string | null, publicId: string | null): Promise<void> {
+    try {
+      if (publicId) {
+        console.log(`Suppression de l'image sur Cloudinary avec Public ID : ${publicId}`);
+        await this.cloudinaryService.deleteImage(publicId);
+        console.log(`Image supprimée avec succès de Cloudinary.`);
       }
+
+      if (photoUrl && photoUrl.startsWith('uploads/') && fs.existsSync(photoUrl)) {
+        console.log(`Suppression du fichier local : ${photoUrl}`);
+        await fsPromises.unlink(photoUrl); // Utilisation de fsPromises.unlink pour éviter des erreurs de callback
+        console.log(`Fichier local supprimé avec succès.`);
+      }
+    } catch (error) {
+      console.error(`Erreur lors du nettoyage de l'ancienne photo : ${error.message}`);
     }
-  
-  
+  }
 
   // Méthode de validation de mot de passe et évaluation de sa force
   private validatePassword(password: string): string {
@@ -73,9 +71,7 @@ export class UtilisateurService {
   
     // Vérification obligatoire : longueur minimale
     if (password.length < minLength) {
-      throw new BadRequestException(
-        'Le mot de passe doit contenir au moins six caractères.'
-      );
+      throw new BadRequestException('Le mot de passe doit contenir au moins six caractères.');
     }
   
     // Vérification facultative pour évaluer la force
@@ -94,12 +90,11 @@ export class UtilisateurService {
     // Retourner la force
     return strength >= 3 ? 'fort' : 'faible';
   }
-  
 
   // Méthode de création d'un utilisateur avec chiffrement du mot de passe et rôle par défaut
   async createUser(data: CreateUtilisateurDto, photoFile?: Express.Multer.File): Promise<{ message: string }> {
     console.log("Début de création utilisateur:", { data, photoFile });
-
+  
     const utilisateurExistant = await this.prisma.utilisateur.findUnique({
       where: { email: data.email },
     });
@@ -107,21 +102,21 @@ export class UtilisateurService {
     if (utilisateurExistant) {
       throw new ConflictException('Un utilisateur avec cet email existe déjà.');
     }
-
+  
     if (!data.email || !data.nom_user) {
       console.error("Email ou nom d'utilisateur manquant !");
       throw new BadRequestException("Les champs email et nom d'utilisateur sont obligatoires.");
     }
-
+  
     try {
-      // Définir le rôle par défaut
-      const role = data.role || RoleEnum.Visiteur;
+      // Définir le rôle par défaut et s'assurer qu'il est bien formaté
+      const role = (data.role || RoleEnum.Visiteur) as RoleEnum;
 
       // Vérifier que les mots de passe correspondent
       if (data.motDePasse !== data.confirmPassword) {
         throw new BadRequestException("Le mot de passe et sa confirmation ne correspondent pas.");
       }
-
+  
       // Valider la force du mot de passe
       const passwordStrength = this.validatePassword(data.motDePasse);
       if (passwordStrength === 'faible') {
@@ -129,44 +124,42 @@ export class UtilisateurService {
           "Le mot de passe est trop faible. Utilisez au moins 3 des éléments suivants : une majuscule, une minuscule, un chiffre ou un caractère spécial."
         );
       }
-
+  
       // Hacher le mot de passe après validation
       const hashedPassword = await bcrypt.hash(data.motDePasse, 10);
-
+  
       // Gestion de la photo de profil
-      let photoProfil = 'uploads/profiles/default.jpg'; // Photo par défaut
-
-    if (photoFile) {
-      // Cas où un fichier est envoyé via Multer
-      const uploadResult = await this.cloudinaryService.uploadLocalImage(photoFile.path, 'users/profiles');
-      photoProfil = uploadResult.url;
-    } else if (data.photoProfil) {
-      if (data.photoProfil.startsWith('http')) {
-        // Utilisation d'une URL existante
-        photoProfil = data.photoProfil;
-      } else {
-        // Téléversement d'un chemin local à Cloudinary
-        const uploadResult = await this.cloudinaryService.uploadLocalImage(data.photoProfil, 'users/profiles');
+      let photoProfil = ''; // Pas de photo par défaut
+  
+      if (photoFile) {
+        const uploadResult = await this.cloudinaryService.uploadLocalImage(photoFile.path, 'users/profiles');
         photoProfil = uploadResult.url;
+      } else if (data.photoProfil) {
+        if (data.photoProfil.startsWith('http')) {
+          photoProfil = data.photoProfil;
+        } else {
+          const uploadResult = await this.cloudinaryService.uploadLocalImage(data.photoProfil, 'users/profiles');
+          photoProfil = uploadResult.url;
+        }
       }
-    }
-
-    // Création de l'utilisateur dans la base de données
-    await this.prisma.utilisateur.create({
-      data: {
-        nom_user: data.nom_user,
-        adress: data.adress,
-        contact: data.contact, 
-        email: data.email,
-        motDePasse: hashedPassword,
-        role,
-        photoProfil,
-      },
-    });
+  
+      // Création de l'utilisateur dans la base de données
+      await this.prisma.utilisateur.create({
+        data: {
+          nom_user: data.nom_user,
+          adress: data.adress,
+          contact: data.contact,
+          email: data.email,
+          motDePasse: hashedPassword,
+          role: role,
+          photoProfil: photoProfil || null, // Stocker null si aucune photo de profil n'est définie
+        },
+      });
+  
       return { message: 'Utilisateur créé avec succès' };
     } catch (error) {
       console.error(error);
-      return { message: 'Échec de la création de l’utilisateur' };
+      throw new Error('Échec de la création de l’utilisateur');
     }
   }
 
@@ -249,7 +242,6 @@ export class UtilisateurService {
       let photoPublicId = existingUser.photoPublicId;
 
       if (photo) {
-
         console.log(`Téléversement de la nouvelle photo depuis Multer : ${photo.path}`);
 
         // Nettoyer l'ancienne photo
@@ -283,7 +275,7 @@ export class UtilisateurService {
           motDePasse: updatedPassword,
           role: data.role || existingUser.role,
           derniereConnexion: data.derniereConnexion || existingUser.derniereConnexion,
-          photoProfil, // Mise à jour de l'URL de la photo
+          photoProfil: photoProfil || null, // Stocker null si aucune photo de profil n'est définie
           photoPublicId,
         },
       });
@@ -295,7 +287,6 @@ export class UtilisateurService {
       throw new Error(`Échec de la mise à jour de l'utilisateur : ${error.message}`);
     }
   }
-  
 
   // Méthode de suppression d'un utilisateur avec nettoyage des relations
   async deleteUser(id: string): Promise<{ message: string }> {
@@ -306,7 +297,7 @@ export class UtilisateurService {
       if (!user) throw new NotFoundException(`Utilisateur avec ID ${id} non trouvé.`);
   
       // Supprimer la photo dans Cloudinary si elle n'est pas par défaut
-      if (user.photoPublicId  && user.photoProfil !== 'uploads/profiles/default.jpg') {
+      if (user.photoPublicId) {
         console.log(`Suppression de la photo sur Cloudinary avec public_id: ${user.photoPublicId}`);
         await this.nettoyerAnciennePhoto(user.photoProfil, user.photoPublicId);
       }
@@ -324,5 +315,5 @@ export class UtilisateurService {
       console.error(error);
       throw new BadRequestException("Échec de la suppression de l'utilisateur.");
     }
-  }  
+  }
 }

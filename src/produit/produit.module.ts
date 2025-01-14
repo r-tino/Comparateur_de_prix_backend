@@ -5,13 +5,15 @@ import { ProduitController } from './produit.controller';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CloudinaryModule } from '../cloudinary/cloudinary.module'; // Import du module Cloudinary
-import { UtilsModule } from '../utils/utils.module'; // Importez UtilsModule
-import { HistoriquePrixService } from 'src/historique-prix/historique-prix.service';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { UtilsModule } from '../utils/utils.module';
+import { HistoriquePrixService } from '../historique-prix/historique-prix.service';
+import { NotificationModule } from '../notification/notification.module'; // Importation de NotificationModule
 
 @Module({
-  imports: [AuthModule, CloudinaryModule, UtilsModule], // Ajout des modules Auth et Cloudinary
+  imports: [AuthModule, CloudinaryModule, UtilsModule, NotificationModule], // Ajout de NotificationModule
   controllers: [ProduitController],
-  providers: [ProduitService, PrismaService, JwtAuthGuard, HistoriquePrixService], // Ajout de HistoriquePrixService
+  providers: [ProduitService, PrismaService, JwtAuthGuard, HistoriquePrixService], // Fournisseurs nécessaires
+  exports: [ProduitService],
 })
 export class ProduitModule {}

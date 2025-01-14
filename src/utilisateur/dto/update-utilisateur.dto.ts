@@ -1,3 +1,5 @@
+// src/utilisateur/dto/update-utilisateur.dto.ts
+
 import { IsString, IsEmail, MinLength, MaxLength, IsEnum, IsOptional, IsDateString } from 'class-validator';
 import { RoleEnum } from '@prisma/client';
 
