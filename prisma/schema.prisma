@@ -64,6 +64,8 @@ model Produit {
   prixInitial     Float
   datePublication DateTime  @default(now())
   disponibilite   Boolean   @default(true) // Nouveau champ pour gérer la disponibilité
+  isFavorite      Boolean   @default(false) // Indique si le produit est favori
+  isVisited       Boolean   @default(false) // Indique si le produit a été visité
   
   // Relations
 
@@ -82,6 +84,7 @@ model Produit {
 
   Commentaire Commentaire[]                   // Un produit peut recevoir plusieurs commentaires. (0...*)
 }
+
 
 // Modele offres
 model Offre {
