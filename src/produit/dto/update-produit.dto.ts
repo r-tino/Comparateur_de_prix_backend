@@ -1,5 +1,5 @@
 // src/produit/dto/create-produit.dto.ts
-import { IsString, IsNumber, IsBoolean, IsOptional, ValidateNested, IsEnum } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsOptional, ValidateNested, IsEnum, IsObject } from 'class-validator';
 import { Type } from 'class-transformer';
 
   class PhotoUpdateDto {
@@ -39,4 +39,8 @@ import { Type } from 'class-transformer';
   
     @IsOptional()
     photosToDelete?: string[];
+
+    @IsOptional()
+    @IsObject({ message: 'Les attributs doivent être un objet JSON valide.' })
+    attributs?: Record<string, any>;
   }

@@ -10,7 +10,7 @@ async function bootstrap() {
   // Configuration CORS pour permettre les requêtes cross-origin
   app.enableCors({
     origin: 'http://localhost:3000', // Frontend autorisé
-    methods: 'GET,POST,PATCH,DELETE', // Méthodes HTTP autorisées
+    methods: 'GET,POST,PUT,PATCH,DELETE', // Méthodes HTTP autorisées
     credentials: true, // Permet les cookies et headers d'authentification
   });
   

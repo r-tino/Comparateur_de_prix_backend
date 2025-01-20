@@ -1,13 +1,14 @@
+// src/categorie/categorie.module.ts
 import { Module } from '@nestjs/common';
 import { CategorieService } from './categorie.service';
 import { CategorieController } from './categorie.controller';
-import { PrismaService } from '../prisma/prisma.service'; // Assurez-vous que PrismaService est correctement importé
-import { AuthModule } from '../auth/auth.module'; // Importez AuthModule
+import { PrismaService } from '../prisma/prisma.service';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [AuthModule], // Ajoutez AuthModule ici
+  imports: [AuthModule],
   controllers: [CategorieController],
-  providers: [CategorieService, PrismaService], // N'oubliez pas d'ajouter PrismaService pour l'accès à la base de données
-  exports: [CategorieService] // Vous pouvez exporter le service si nécessaire pour d'autres modules
+  providers: [CategorieService, PrismaService],
+  exports: [CategorieService],
 })
 export class CategorieModule {}

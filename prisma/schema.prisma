@@ -55,34 +55,34 @@ enum RoleEnum {
     produitId     String?        @db.ObjectId
   }
 
-// Modele Produit
+// Modèle Produit
 model Produit {
-  id_Produit      String    @id @default(auto()) @map("_id") @db.ObjectId
+  id_Produit      String     @id @default(auto()) @map("_id") @db.ObjectId
   nom_Produit     String
   description     String
   qualiteMoyenne  Float?
   prixInitial     Float
-  datePublication DateTime  @default(now())
-  disponibilite   Boolean   @default(true) // Nouveau champ pour gérer la disponibilité
-  isFavorite      Boolean   @default(false) // Indique si le produit est favori
-  isVisited       Boolean   @default(false) // Indique si le produit a été visité
-  
+  datePublication DateTime   @default(now())
+  disponibilite   Boolean    @default(true) // Nouveau champ pour gérer la disponibilité
+  isFavorite      Boolean    @default(false) // Indique si le produit est favori
+  isVisited       Boolean    @default(false) // Indique si le produit a été visité
+
+  // Valeurs des attributs dynamiques (lié à la catégorie du produit)
+  valeursAttributs Json?     // { nomAttribut: valeur, ... }
+
   // Relations
+  utilisateur      Utilisateur   @relation(fields: [utilisateurId], references: [id_User])
+  utilisateurId    String        @db.ObjectId
 
-  // Un utilisateur peut publier plusieurs de produits.(0...*)
-  utilisateur     Utilisateur  @relation(fields: [utilisateurId], references: [id_User])
-  utilisateurId   String       @db.ObjectId
+  photos           Photo[]                    // Un produit peut avoir plusieurs photos
+  offre            Offre[]                    // Un produit peut avoir plusieurs offres
+  historiquePrix   HistoriquePrix[]           // Un produit peut avoir plusieurs Historique de Prix
+  notes            Note[]                     // Un produit est évalué par plusieurs notes
 
-  photos         Photo[]                    // Un produit peut avoir plusieurs photos (galeri_photo).(0...*) 
-  offre          Offre[]                    // Un produit peut avoir plusieurs offres.(0...*)
-  historiquePrix HistoriquePrix[]           // Un produit peut avoir plusieurs Historique de Prix.(0...*)
-  notes          Note[]                     // Un produit est evaluer par plusieurs notes. (0...*)
+  categorie        Categorie?   @relation(fields: [categorieId], references: [id_Categorie])
+  categorieId      String?      @db.ObjectId
 
-  // Un produit appartient à une seule catégorie.(1)
-  categorie      Categorie?       @relation(fields: [categorieId], references: [id_Categorie])
-  categorieId    String?          @db.ObjectId
-
-  Commentaire Commentaire[]                   // Un produit peut recevoir plusieurs commentaires. (0...*)
+  Commentaire      Commentaire[]              // Un produit peut recevoir plusieurs commentaires
 }
 
 
@@ -171,17 +171,33 @@ model Note {
   produitId String  @db.ObjectId
 }
 
-// Modele Categorie
+// Modèle Categorie
 model Categorie {
-  id_Categorie   String   @id @default(auto()) @map("_id") @db.ObjectId
+  id_Categorie   String     @id @default(auto()) @map("_id") @db.ObjectId
   nomCategorie   String
-  isActive       Boolean  @default(true)
-  attributs      Json?
-  typeCategory   String?  
+  isActive       Boolean    @default(true)
+  typeCategory   String
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  produits       Produit[] // Une catégorie peut regrouper plusieurs produits.(0...*)
+  // Relations
+  attributs      Attribut[] // Une catégorie peut avoir plusieurs attributs
+  produits       Produit[]  // Une catégorie peut regrouper plusieurs produits
 }
 
+// Modèle Attribut
+model Attribut {
+  id_Attribut    String     @id @default(auto()) @map("_id") @db.ObjectId
+  nomAttribut    String     // Nom de l'attribut dynamique
+  estObligatoire Boolean    // Indique si l'attribut est requis
+  typeAttribut   String     // Ex: "String", "Number", "Boolean", etc.
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Relation avec Categorie
+  categorie      Categorie  @relation(fields: [categorieId], references: [id_Categorie])
+  categorieId    String     @db.ObjectId
+}
 
 // Modele Commentaire
 model Commentaire {

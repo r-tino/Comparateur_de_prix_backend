@@ -1,6 +1,7 @@
 // src/categorie/dto/create-categorie.dto.ts
-
-import { IsString, MinLength, MaxLength, IsOptional, IsBoolean, IsObject } from 'class-validator';
+import { IsArray, ValidateNested, IsString, MinLength, MaxLength, IsOptional, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
+import { CreateAttributDto } from '../../attribut/dto/create-attribut.dto';
 
 export class CreateCategorieDto {
   @IsString({ message: 'Le nom de la catégorie doit être une chaîne de caractères.' })
@@ -13,11 +14,13 @@ export class CreateCategorieDto {
   isActive?: boolean;
 
   @IsOptional()
-  @IsObject({ message: 'Les attributs doivent être un objet JSON valide.' })
-  attributs?: Record<string, any>;
-
-  @IsOptional()
   @IsString({ message: 'Le type de la catégorie doit être une chaîne de caractères.' })
   @MinLength(1, { message: 'Veuillez sélectionner un type' })
   typeCategory?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateAttributDto)
+  attributs?: CreateAttributDto[];
 }

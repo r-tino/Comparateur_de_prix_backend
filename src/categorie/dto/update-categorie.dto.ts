@@ -1,6 +1,7 @@
 // src/categorie/dto/update-categorie.dto.ts
-
-import { IsString, MinLength, MaxLength, IsOptional, IsBoolean, IsObject } from 'class-validator';
+import { IsArray, ValidateNested, IsString, MinLength, MaxLength, IsOptional, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
+import { UpdateAttributDto } from '../../attribut/dto/update-attribut.dto';
 
 export class UpdateCategorieDto {
   @IsOptional()
@@ -14,11 +15,13 @@ export class UpdateCategorieDto {
   isActive?: boolean;
 
   @IsOptional()
-  @IsObject({ message: 'Les attributs doivent être un objet JSON valide.' })
-  attributs?: Record<string, any>;
-
-  @IsOptional()
   @IsString({ message: 'Le type de la catégorie doit être une chaîne de caractères.' })
   @MinLength(1, { message: 'Veuillez sélectionner un type' })
-  typeCategory?: string; // Use the correct field name
+  typeCategory?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpdateAttributDto)
+  attributs?: UpdateAttributDto[];
 }

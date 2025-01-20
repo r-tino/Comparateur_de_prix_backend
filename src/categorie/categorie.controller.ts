@@ -1,5 +1,4 @@
 // src/categorie/categorie.controller.ts
-
 import { Controller, Post, Get, Put, Delete, Body, Param, UseGuards, Query, Req } from '@nestjs/common';
 import { CategorieService } from './categorie.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -26,8 +25,8 @@ export class CategorieController {
     @Query('limit') limit: number = 10,
     @Query('nomCategorie') nomCategorie?: string,
   ) {
-    const isAdmin = req.user?.role === 'Admin';
-    return this.categorieService.getCategories(Number(page), Number(limit), nomCategorie, isAdmin || false);
+    const isAdmin = req?.user?.role === 'Admin';
+    return this.categorieService.getCategories(page, limit, nomCategorie, isAdmin || false);
   }
 
   @Put(':id')
@@ -48,7 +47,12 @@ export class CategorieController {
   @Get('statistics')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Admin')
-  async getCategorieStatistics() {
-    return this.categorieService.getCategorieStatistics();
+  async getCategorieStatistics(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Req() req: any,
+  ) {
+    const isAdmin = req?.user?.role === 'Admin';
+    return this.categorieService.getCategorieStatistics(page, limit, isAdmin || false);
   }
 }

@@ -1,5 +1,5 @@
 // src/produit/produit.service.ts
-import { Injectable, NotFoundException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, TypeNotifEnum, TypePrixEnum } from '@prisma/client';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -33,8 +33,31 @@ export class ProduitService {
   }
 
   /**
+   * Valide les attributs dynamiques basés sur la catégorie.
+   */
+  private async validateDynamicAttributes(categorieId: string, attributes: Record<string, any>): Promise<void> {
+    if (!categorieId || !attributes) return;
+
+    const categorie = await this.prisma.categorie.findUnique({
+      where: { id_Categorie: categorieId },
+      include: { attributs: true },
+    });
+
+    if (!categorie) {
+      throw new NotFoundException('Catégorie non trouvée');
+    }
+
+    const requiredAttributes = categorie.attributs.filter(attr => attr.estObligatoire);
+
+    for (const attr of requiredAttributes) {
+      if (!(attr.nomAttribut in attributes)) {
+        throw new BadRequestException(`L'attribut requis "${attr.nomAttribut}" est manquant pour la catégorie "${categorie.nomCategorie}".`);
+      }
+    }
+  }
+
+  /**
    * Création d'un produit avec utilisateur et galerie photo
-   * Évite les doublons en regroupant les téléchargements de photos
    */
   async creerProduit(data: CreateProduitDto, utilisateurId: string): Promise<{ message: string; produit: any }> {
     console.log('Début de la création du produit:', data);
@@ -42,6 +65,11 @@ export class ProduitService {
     try {
       const { categorieId, photos, disponibilite, ...produitData } = data;
   
+      // Valider les attributs dynamiques
+      if (categorieId) {
+        await this.validateDynamicAttributes(categorieId, produitData);
+      }
+
       const produitCree = await this.prisma.produit.create({
         data: {
           ...produitData,
@@ -192,20 +220,23 @@ export class ProduitService {
   
       const { photosToDelete, photosToAdd, categorieId, prixInitial, ...updateData } = data;
   
+      // Valider les attributs dynamiques si la catégorie est modifiée ou les attributs sont mis à jour
+      if (categorieId || Object.keys(updateData).length > 0) {
+        await this.validateDynamicAttributes(categorieId || produit.categorieId, updateData);
+      }
+
       // Suppression des photos
       try {
         if (photosToDelete?.length > 0) {
-          const photosToDeleteData = produit.photos.filter((photo) =>
-            photosToDelete.includes(photo.id_Photo)
-          );
-  
+          const photosToDeleteData = produit.photos.filter(photo => photosToDelete.includes(photo.id_Photo));
+
           for (const photo of photosToDeleteData) {
             const publicId = this.cloudinary.getPublicIdFromUrl(photo.url);
             if (publicId) {
               await this.cloudinary.deleteImage(publicId);
             }
           }
-  
+    
           await this.prisma.photo.deleteMany({
             where: { id_Photo: { in: photosToDelete }, produitId: id },
           });

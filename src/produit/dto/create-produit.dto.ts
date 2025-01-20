@@ -1,5 +1,5 @@
 // src/produit/dto/create-produit.dto.ts
-import { IsString, IsNumber, IsBoolean, IsOptional, ValidateNested, ArrayMinSize } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsOptional, ValidateNested, ArrayMinSize, IsObject } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PhotoDto {
@@ -37,4 +37,8 @@ export class CreateProduitDto {
   @Type(() => PhotoDto)
   @ArrayMinSize(1, { message: 'Le produit doit avoir au moins une photo.' })
   photos: PhotoDto[];
+
+  @IsOptional()
+  @IsObject({ message: 'Les attributs doivent être un objet JSON valide.' })
+  attributs?: Record<string, any>;
 }
