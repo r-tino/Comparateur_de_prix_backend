@@ -9,10 +9,9 @@ import { UpdateProduitDto } from './dto/update-produit.dto';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { HistoriquePrixService } from 'src/historique-prix/historique-prix.service';
 import { TypePrixEnum } from '@prisma/client';
-
+import * as fs from "fs"
 
 @Controller('produits')
-@UseGuards(RolesGuard)  // Retirer JwtAuthGuard ici
 export class ProduitController {
   constructor(
       private readonly produitService: ProduitService,
@@ -23,12 +22,20 @@ export class ProduitController {
    * Endpoint pour créer un produit
    * Gère les uploads de photos en regroupant les requêtes
    */
-
-  // Gardez JwtAuthGuard pour les routes qui en ont besoin
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Admin', 'Vendeur')
-  @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileFieldsInterceptor([{ name: 'photos', maxCount: 10 }]))
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'photos', maxCount: 10 }
+  ], {
+    fileFilter: (req, file, callback) => {
+      if (!file.mimetype.startsWith('image/')) {
+        return callback(new BadRequestException('Seules les images sont autorisées.'), false);
+      }
+      callback(null, true);
+    },
+    limits: { fileSize: 5 * 1024 * 1024 } // Limite à 5 Mo par fichier
+  }))  
   async creerProduit(
     @Body() createProduitDto: CreateProduitDto,
     @Req() req,
@@ -40,19 +47,35 @@ export class ProduitController {
       throw new UnauthorizedException('Seuls les vendeurs et administrateurs peuvent créer des produits.');
     }
 
-    // Téléchargement unique des fichiers et photos locales
-    if (files?.photos?.length > 0) {
-      createProduitDto.photos = await Promise.all(
-        files.photos.map(async (file) => {
-          const result = await this.produitService.cloudinary.uploadLocalImage(file.path, 'produits');
-          return { url: result.url, couverture: false };
-        }),
-      );
+    try {
+      if (files?.photos?.length > 0) {
+        const uploadResults = await Promise.all(
+          files.photos.map((file) => this.produitService.cloudinary.uploadLocalImage(file.path, "produits")),
+        )
+  
+        createProduitDto.photos = uploadResults.map((result) => ({
+          url: result.url,
+          couverture: false,
+          publicId: result.public_id,
+        }))
+      }
+  
+      const result = await this.produitService.creerProduit(createProduitDto, utilisateurId)
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Erreur lors de la création du produit:", error)
+      throw new InternalServerErrorException("Erreur lors de la création du produit: " + error.message)
+    } finally {
+      // Nettoyage des fichiers temporaires
+      if (files?.photos) {
+        files.photos.forEach((file) => {
+          fs.unlink(file.path, (err) => {
+            if (err) console.error("Erreur lors de la suppression du fichier temporaire:", err)
+          })
+        })
+      }
     }
-
-    return await this.produitService.creerProduit(createProduitDto, utilisateurId);
   }
-
 
   // Lecture des produits avec filtrage et pagination
   @Get()
@@ -73,47 +96,43 @@ export class ProduitController {
   }
 
 
-  @Get('search')
+  @Get("search")
   async rechercherProduits(
     @Query('nom') nom: string,
     @Query('categorie') categorieId: string,
     @Query('disponibilite') disponibilite: string,
     @Query('prixMin') prixMin: string,
     @Query('prixMax') prixMax: string,
-    @Query('page') page: string = '1',  // Défini en chaîne par défaut
-    @Query('limit') limit: string = '10', // Défini en chaîne par défaut
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
   ) {
-    // Convertir les valeurs en types nécessaires avec des valeurs par défaut en cas de conversion échouée
-    const convertedPrixMin = prixMin ? Number(prixMin) : undefined;
-    const convertedPrixMax = prixMax ? Number(prixMax) : undefined;
-    const pageNumber = Number(page) || 1;
-    const limitNumber = Number(limit) || 10;
+    try {
+      const filters = {
+        nom,
+        categorieId,
+        disponibilite: disponibilite === "true",
+        prixMin: prixMin ? Number(prixMin) : undefined,
+        prixMax: prixMax ? Number(prixMax) : undefined,
+        page: Number(page) || 1,
+        limit: Number(limit) || 10,
+      }
 
-    // Préparation des filtres pour la recherche
-    const filters: any = {
-      nom,
-      categorieId,
-      prixMin: convertedPrixMin,
-      prixMax: convertedPrixMax,
-      page: pageNumber,
-      limit: limitNumber,
-    };
-
-    // Inclure `disponibilite` uniquement s'il est défini
-    if (disponibilite !== undefined) {
-      filters.disponibilite = disponibilite === 'true';
+      const result = await this.produitService.rechercherProduits(filters)
+      return { success: true, data: result }
+    } catch (error) {
+      console.error("Erreur lors de la recherche des produits:", error)
+      return {
+        success: false,
+        error: error.message || "Une erreur est survenue lors de la recherche des produits.",
+      }
     }
-
-    console.log('Filtres envoyés au service:', filters);
-
-    return this.produitService.rechercherProduits(filters);
   }
 
   
   // Modification d'un produit (uniquement par le vendeur qui l'a créé)
   @Patch(':id')
+  @UseGuards( JwtAuthGuard, RolesGuard)
   @Roles('Admin', 'Vendeur')
-  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour POST
   async modifierProduit(@Param('id') id: string, @Body() data: UpdateProduitDto, @Req() req) {
     console.log('ID utilisateur connecté dans le contrôleur:', req.user?.userId);  // Utilisez `userId` ici
     console.log('Rôle utilisateur dans le contrôleur:', req.user?.role);
@@ -141,8 +160,8 @@ export class ProduitController {
    * @param typePrix Type de prix (produit, offre, promotion)
    */
   @Get(':produitId/historique-prix')
-  @Roles('Admin', 'Vendeur') // Définition des rôles autorisés
-  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour POST
+  @UseGuards( JwtAuthGuard, RolesGuard)
+  @Roles('Admin', 'Vendeur')
   async lireHistoriquePrix(
     @Param('produitId') produitId: string, // Récupération de l'ID du produit
     @Query('page') page = '1', // Valeur par défaut pour la page
@@ -185,8 +204,8 @@ export class ProduitController {
 
   // Suppression d'un produit (uniquement par le vendeur qui l'a créé)
   @Delete(':id')
+  @UseGuards( JwtAuthGuard, RolesGuard)
   @Roles('Admin', 'Vendeur')
-  @UseGuards(JwtAuthGuard)  // Ajouter JwtAuthGuard pour POST
   async supprimerProduit(@Param('id') id: string, @Req() req) {
     const utilisateurId = req.user.userId;  // Assurez-vous que l'ID de l'utilisateur est correct
     const role = req.user.role;  // Récupérez le rôle de l'utilisateur depuis `req.user`

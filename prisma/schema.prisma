@@ -55,36 +55,36 @@ enum RoleEnum {
     produitId     String?        @db.ObjectId
   }
 
-// Modèle Produit
-model Produit {
-  id_Produit      String     @id @default(auto()) @map("_id") @db.ObjectId
-  nom_Produit     String
-  description     String
-  qualiteMoyenne  Float?
-  prixInitial     Float
-  datePublication DateTime   @default(now())
-  disponibilite   Boolean    @default(true) // Nouveau champ pour gérer la disponibilité
-  isFavorite      Boolean    @default(false) // Indique si le produit est favori
-  isVisited       Boolean    @default(false) // Indique si le produit a été visité
+  // Modèle Produit
+  model Produit {
+    id_Produit      String     @id @default(auto()) @map("_id") @db.ObjectId
+    nom_Produit     String
+    description     String
+    qualiteMoyenne  Float?
+    prixInitial     Float
+    stock           Int        @default(0)
+    datePublication DateTime   @default(now())
+    disponibilite   Boolean    @default(true) // Nouveau champ pour gérer la disponibilité
+    isFavorite      Boolean    @default(false) // Indique si le produit est favori
+    isVisited       Boolean    @default(false) // Indique si le produit a été visité
 
-  // Valeurs des attributs dynamiques (lié à la catégorie du produit)
-  valeursAttributs Json?     // { nomAttribut: valeur, ... }
+    // Valeurs des attributs dynamiques (lié à la catégorie du produit)
+    valeursAttributs Json?     // { nomAttribut: valeur, ... }
 
-  // Relations
-  utilisateur      Utilisateur   @relation(fields: [utilisateurId], references: [id_User])
-  utilisateurId    String        @db.ObjectId
+    // Relations
+    utilisateur      Utilisateur   @relation(fields: [utilisateurId], references: [id_User])
+    utilisateurId    String        @db.ObjectId
 
-  photos           Photo[]                    // Un produit peut avoir plusieurs photos
-  offre            Offre[]                    // Un produit peut avoir plusieurs offres
-  historiquePrix   HistoriquePrix[]           // Un produit peut avoir plusieurs Historique de Prix
-  notes            Note[]                     // Un produit est évalué par plusieurs notes
+    photos           Photo[]                    // Un produit peut avoir plusieurs photos
+    offre            Offre[]                    // Un produit peut avoir plusieurs offres
+    historiquePrix   HistoriquePrix[]           // Un produit peut avoir plusieurs Historique de Prix
+    notes            Note[]                     // Un produit est évalué par plusieurs notes
 
-  categorie        Categorie?   @relation(fields: [categorieId], references: [id_Categorie])
-  categorieId      String?      @db.ObjectId
+    categorie        Categorie?   @relation(fields: [categorieId], references: [id_Categorie])
+    categorieId      String?      @db.ObjectId
 
-  Commentaire      Commentaire[]              // Un produit peut recevoir plusieurs commentaires
-}
-
+    Commentaire      Commentaire[]              // Un produit peut recevoir plusieurs commentaires
+  }
 
 // Modele offres
 model Offre {

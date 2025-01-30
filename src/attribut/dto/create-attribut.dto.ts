@@ -14,7 +14,4 @@ export class CreateAttributDto {
   @IsString({ message: "Le type de l'attribut doit être une chaîne de caractères." })
   @MinLength(2, { message: "Le type de l'attribut doit contenir au moins 2 caractères." })
   typeAttribut: string;
-
-  @IsString({ message: "L'ID de la catégorie doit être une chaîne de caractères." })
-  categorieId: string;
 }

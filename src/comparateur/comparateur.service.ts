@@ -15,10 +15,11 @@ export class ComparateurService {
 
   // Comparaison automatique
   async comparerProduitsAutomatiquement(criteres?: any) {
-    const produits = (await this.produitService.lireProduits()).data;
+    const produitsResponse = await this.produitService.lireProduits();
+    const produits = produitsResponse.data;
     const offres = (await this.offreService.findAllOffres({})).data;
     const historiquesPrix = await Promise.all(
-      produits.map((produit) =>
+      produits.data.map((produit) =>
         this.historiquePrixService.lireHistoriquePrix(
           produit.id_Produit,
           TypePrixEnum.PRODUIT,
@@ -28,7 +29,7 @@ export class ComparateurService {
       ),
     );
 
-    const resultats = produits.map((produit, index) => ({
+    const resultats = produits.data.map((produit, index) => ({
       produit,
       offres: offres.filter((offre) => offre.id_produit === produit.id_Produit),
       historique: historiquesPrix[index]?.data || [],

@@ -11,4 +11,4 @@ import { AuthModule } from '../auth/auth.module';
   providers: [CategorieService, PrismaService],
   exports: [CategorieService],
 })
-export class CategorieModule {}
+export class CategorieModule {} 

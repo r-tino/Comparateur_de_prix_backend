@@ -1,5 +1,5 @@
 // src/utilisateur/utilisateur.service.ts
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -159,7 +159,7 @@ export class UtilisateurService {
       return { message: 'Utilisateur créé avec succès' };
     } catch (error) {
       console.error(error);
-      throw new Error('Échec de la création de l’utilisateur');
+      throw new InternalServerErrorException('Échec de la création de l’utilisateur');
     }
   }
 
@@ -284,7 +284,7 @@ export class UtilisateurService {
       return { message: 'Utilisateur mis à jour avec succès' };
     } catch (error) {
       console.error(`Erreur lors de la mise à jour de l'utilisateur :`, error);
-      throw new Error(`Échec de la mise à jour de l'utilisateur : ${error.message}`);
+      throw new InternalServerErrorException(`Échec de la mise à jour de l'utilisateur : ${error.message}`);
     }
   }
 

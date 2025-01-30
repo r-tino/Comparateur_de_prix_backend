@@ -1,5 +1,5 @@
 // src/produit/dto/create-produit.dto.ts
-import { IsString, IsNumber, IsBoolean, IsOptional, ValidateNested, IsEnum, IsObject } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsOptional, ValidateNested, IsEnum, IsObject, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
   class PhotoUpdateDto {
@@ -23,6 +23,11 @@ import { Type } from 'class-transformer';
     @IsNumber()
     @IsOptional()
     prixInitial?: number;
+
+    @IsNumber()
+    @Min(0, { message: 'Le stock ne peut pas être inférieur à zéro.' })
+    @IsOptional()
+    stock?: number;
   
     @IsBoolean()
     @IsOptional()

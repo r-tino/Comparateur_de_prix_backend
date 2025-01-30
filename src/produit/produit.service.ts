@@ -61,19 +61,20 @@ export class ProduitService {
    */
   async creerProduit(data: CreateProduitDto, utilisateurId: string): Promise<{ message: string; produit: any }> {
     console.log('Début de la création du produit:', data);
-  
+
     try {
-      const { categorieId, photos, disponibilite, ...produitData } = data;
-  
+      const { categorieId, photos, disponibilite, valeursAttributs, ...produitData } = data;
+
       // Valider les attributs dynamiques
       if (categorieId) {
-        await this.validateDynamicAttributes(categorieId, produitData);
+        await this.validateDynamicAttributes(categorieId, valeursAttributs || {});
       }
 
       const produitCree = await this.prisma.produit.create({
         data: {
           ...produitData,
           disponibilite: disponibilite ?? true,
+          valeursAttributs,
           utilisateur: { connect: { id_User: utilisateurId } },
           categorie: categorieId ? { connect: { id_Categorie: categorieId } } : undefined,
         },
@@ -82,41 +83,26 @@ export class ProduitService {
           categorie: { select: { id_Categorie: true, nomCategorie: true } },
         },
       });
-  
+
       console.log('Produit créé dans la base de données:', produitCree);
-  
+
       if (photos?.length > 0) {
-        const uploadedPhotos = [];
-  
-        for (const photo of photos) {
-          let photoUrl = photo.url;
-  
-          // Convertir les chemins locaux en URLs Cloudinary uniquement si nécessaire
-          if (photoUrl.startsWith('C:\\') || photoUrl.startsWith('/')) {
-            const localPath = path.resolve(photoUrl);
-            const result = await this.cloudinary.uploadLocalImage(localPath, 'produits');
-            photoUrl = result.url;
-          } else if (photoUrl.startsWith('content://') || photoUrl.startsWith('file://') || photoUrl.startsWith('assets-library://')) {
-            const result = await this.cloudinary.uploadMobileImage(photoUrl, 'produits');
-            photoUrl = result.url;
-          }
-  
-          uploadedPhotos.push({
-            url: photoUrl,
-            couverture: photo.couverture || false,
-            produitId: produitCree.id_Produit,
-          });
-        }
-  
-        await this.prisma.photo.createMany({ data: uploadedPhotos });
-        console.log('Photos téléchargées et ajoutées à la base de données:', uploadedPhotos);
-      }
-  
-      const produitComplet = await this.findOneProduit(produitCree.id_Produit);
-      console.log('Produit complet récupéré:', produitComplet);
-  
-      return { message: 'Produit créé avec succès', produit: produitComplet };
-    } catch (error) {
+      const photosData = photos.map((photo) => ({
+        url: photo.url,
+        couverture: photo.couverture || false,
+        produitId: produitCree.id_Produit,
+        publicId: photo.publicId,
+      }))
+
+      await this.prisma.photo.createMany({ data: photosData })
+      console.log("Photos ajoutées à la base de données:", photosData)
+    }
+
+    const produitComplet = await this.findOneProduit(produitCree.id_Produit)
+    console.log("Produit complet récupéré:", produitComplet)
+
+    return { message: 'Produit créé avec succès', produit: produitComplet };
+  } catch (error) {
       console.error('Erreur lors de la création du produit:', error);
       throw new InternalServerErrorException(`Erreur lors de la création du produit : ${error.message || 'Erreur inconnue'}`);
     }
@@ -129,18 +115,21 @@ export class ProduitService {
         skip: (page - 1) * limit,
         take: limit,
         include: {
-          utilisateur: { select: { id_User: true, nom_user: true, role: true } },
+          utilisateur: { select: { id_User: true, nom_user: true, role: true, email: true } }, // Ajout de l'email
           categorie: { select: { id_Categorie: true, nomCategorie: true } },
           photos: { select: { id_Photo: true, url: true, couverture: true } },
         },
       });
-
+  
       const totalCount = await this.prisma.produit.count();
       return {
-        total: totalCount,
-        page,
-        pageCount: Math.ceil(totalCount / limit),
-        data: produits,
+        success: true,
+        data: {
+          total: totalCount,
+          page,
+          pageCount: Math.ceil(totalCount / limit),
+          data: produits,
+        },
       };
     } catch (error) {
       throw new Error(`Erreur lors de la récupération des produits: ${error.message}`);
@@ -151,40 +140,51 @@ export class ProduitService {
      * Recherche des produits avec pagination et filtres
      * Simplifie les appels multiples pour éviter des requêtes redondantes
      */
-  async rechercherProduits(filters: { nom?: string; categorieId?: string; disponibilite?: boolean; prixMin?: number; prixMax?: number; page?: number; limit?: number; }) {
-    const { nom, categorieId, disponibilite, prixMin, prixMax, page = 1, limit = 10 } = filters;
+  async rechercherProduits(filters: {
+    nom?: string
+    categorieId?: string
+    disponibilite?: boolean
+    prixMin?: number
+    prixMax?: number
+    page?: number
+    limit?: number
+  }) {
+    const { nom, categorieId, disponibilite, prixMin, prixMax, page = 1, limit = 10 } = filters
 
     const where: Prisma.ProduitWhereInput = {
-      nom_Produit: nom ? { contains: nom, mode: 'insensitive' } : undefined,
+      nom_Produit: nom ? { contains: nom, mode: "insensitive" } : undefined,
       categorieId: categorieId || undefined,
       prixInitial: {
         gte: prixMin,
         lte: prixMax,
       },
       ...(disponibilite !== undefined && { disponibilite }),
-    };
+    }
 
-    // Appels regroupés pour réduire les interactions avec la base
-    const [produits, totalCount] = await Promise.all([
-      this.prisma.produit.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          utilisateur: { select: { id_User: true, nom_user: true, role: true } },
-          categorie: { select: { id_Categorie: true, nomCategorie: true } },
-          photos: { select: { id_Photo: true, url: true, couverture: true } },
-        },
-      }),
-      this.prisma.produit.count({ where }),
-    ]);
+    try {
+      const [produits, totalCount] = await Promise.all([
+        this.prisma.produit.findMany({
+          where,
+          skip: (page - 1) * limit,
+          take: limit,
+          include: {
+            utilisateur: { select: { id_User: true, nom_user: true, role: true, email: true } },
+            categorie: { select: { id_Categorie: true, nomCategorie: true } },
+            photos: { select: { id_Photo: true, url: true, couverture: true } },
+          },
+        }),
+        this.prisma.produit.count({ where }),
+      ])
 
-    return {
-      total: totalCount,
-      page,
-      pageCount: Math.ceil(totalCount / limit),
-      data: produits,
-    };
+      return {
+        total: totalCount,
+        page,
+        pageCount: Math.ceil(totalCount / limit),
+        data: produits,
+      }
+    } catch (error) {
+      throw new InternalServerErrorException(`Erreur lors de la recherche des produits: ${error.message}`)
+    }
   }
 
   // Lecture d'un produit unique
@@ -192,7 +192,7 @@ export class ProduitService {
     const produit = await this.prisma.produit.findUnique({
       where: { id_Produit: id },
       include: {
-        utilisateur: { select: { id_User: true, nom_user: true, role: true } },
+        utilisateur: { select: { id_User: true, nom_user: true, role: true, email: true } }, // Ajout de l'email
         categorie: { select: { id_Categorie: true, nomCategorie: true } },
         photos: { select: { id_Photo: true, url: true, couverture: true } },
       },
@@ -308,7 +308,7 @@ export class ProduitService {
             categorie: categorieId ? { connect: { id_Categorie: categorieId } } : undefined,
           },
           include: {
-            utilisateur: { select: { id_User: true, nom_user: true, role: true } },
+            utilisateur: { select: { id_User: true, nom_user: true, role: true, email: true } }, // Ajout de l'email
             categorie: { select: { id_Categorie: true, nomCategorie: true } },
             photos: { select: { id_Photo: true, url: true, couverture: true } },
           },
@@ -328,8 +328,6 @@ export class ProduitService {
     }
   }
   
-
-
   // Suppression d'un produit
   async supprimerProduit(id: string, utilisateurId: string, role: string): Promise<{ message: string }> {
     const produit = await this.prisma.produit.findUnique({ where: { id_Produit: id }, select: { utilisateurId: true } });
