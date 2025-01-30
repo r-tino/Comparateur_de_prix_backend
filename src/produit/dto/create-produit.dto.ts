@@ -13,14 +13,7 @@ class PhotoDto {
 
   @IsString()
   @IsOptional()
-  localPath?: string; // Propriété optionnelle pour gérer les chemins locaux
-
-  @IsString()
-  @IsOptional()
   publicId?: string;
-
-  @IsOptional()
-  file?: any; // Ajoutez cette ligne pour définir la propriété file
 }
 
 export class CreateProduitDto {

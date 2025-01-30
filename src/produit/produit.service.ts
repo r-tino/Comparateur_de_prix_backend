@@ -2,11 +2,9 @@
 import { Injectable, NotFoundException, ForbiddenException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, TypeNotifEnum, TypePrixEnum } from '@prisma/client';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { ImageGeneratorService } from '../utils/image-generator.service'; // Nouvel import
 import { CreateProduitDto } from './dto/create-produit.dto';
 import { UpdateProduitDto } from './dto/update-produit.dto';
-import * as path from 'path';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { HistoriquePrixService } from '../historique-prix/historique-prix.service';
 import { NotificationService } from '../notification/notification.service';  // Importation du service
 
@@ -15,26 +13,12 @@ import { NotificationService } from '../notification/notification.service';  // 
 export class ProduitService {
   constructor(
     private readonly prisma: PrismaService,
-    public readonly cloudinary: CloudinaryService,
-    private readonly imageGenerator: ImageGeneratorService, // Injection du service
+    private readonly cloudinary: CloudinaryService,
     private readonly historiquePrixService: HistoriquePrixService, // Injection du service HistoriquePrix
     private readonly notificationService: NotificationService, // Injection du service
   ) {}
 
-  /**
-   * Génère une image localement et retourne son chemin.
-   * @param content Contenu à écrire dans l'image.
-   * @returns Chemin du fichier généré.
-   */
-  async generateLocalImage(content: Buffer): Promise<string> {
-    const fileName = `generated-image-${Date.now()}.png`;
-    const folder = 'local-images'; // Dossier cible pour les images générées
-    return this.imageGenerator.generateImage(fileName, folder, content);
-  }
-
-  /**
-   * Valide les attributs dynamiques basés sur la catégorie.
-   */
+  // Valide les attributs dynamiques basés sur la catégorie.
   private async validateDynamicAttributes(categorieId: string, attributes: Record<string, any>): Promise<void> {
     if (!categorieId || !attributes) return;
 
@@ -56,9 +40,7 @@ export class ProduitService {
     }
   }
 
-  /**
-   * Création d'un produit avec utilisateur et galerie photo
-   */
+  // Création d'un produit avec utilisateur et galerie photo
   async creerProduit(data: CreateProduitDto, utilisateurId: string): Promise<{ message: string; produit: any }> {
     console.log('Début de la création du produit:', data);
 
@@ -87,22 +69,22 @@ export class ProduitService {
       console.log('Produit créé dans la base de données:', produitCree);
 
       if (photos?.length > 0) {
-      const photosData = photos.map((photo) => ({
-        url: photo.url,
-        couverture: photo.couverture || false,
-        produitId: produitCree.id_Produit,
-        publicId: photo.publicId,
-      }))
+        const photosData = photos.map((photo) => ({
+          url: photo.url,
+          couverture: photo.couverture || false,
+          produitId: produitCree.id_Produit,
+          publicId: photo.publicId,
+        }));
 
-      await this.prisma.photo.createMany({ data: photosData })
-      console.log("Photos ajoutées à la base de données:", photosData)
-    }
+        await this.prisma.photo.createMany({ data: photosData });
+        console.log("Photos ajoutées à la base de données:", photosData);
+      }
 
-    const produitComplet = await this.findOneProduit(produitCree.id_Produit)
-    console.log("Produit complet récupéré:", produitComplet)
+      const produitComplet = await this.findOneProduit(produitCree.id_Produit);
+      console.log("Produit complet récupéré:", produitComplet);
 
-    return { message: 'Produit créé avec succès', produit: produitComplet };
-  } catch (error) {
+      return { message: 'Produit créé avec succès', produit: produitComplet };
+    } catch (error) {
       console.error('Erreur lors de la création du produit:', error);
       throw new InternalServerErrorException(`Erreur lors de la création du produit : ${error.message || 'Erreur inconnue'}`);
     }
@@ -136,10 +118,7 @@ export class ProduitService {
     }
   }
 
-  /**
-     * Recherche des produits avec pagination et filtres
-     * Simplifie les appels multiples pour éviter des requêtes redondantes
-     */
+  // Recherche des produits avec pagination et filtres
   async rechercherProduits(filters: {
     nom?: string
     categorieId?: string
@@ -219,63 +198,44 @@ export class ProduitService {
       }
   
       const { photosToDelete, photosToAdd, categorieId, prixInitial, ...updateData } = data;
-  
+
       // Valider les attributs dynamiques si la catégorie est modifiée ou les attributs sont mis à jour
       if (categorieId || Object.keys(updateData).length > 0) {
         await this.validateDynamicAttributes(categorieId || produit.categorieId, updateData);
       }
 
       // Suppression des photos
-      try {
-        if (photosToDelete?.length > 0) {
-          const photosToDeleteData = produit.photos.filter(photo => photosToDelete.includes(photo.id_Photo));
+      if (photosToDelete?.length > 0) {
+        const photosToDeleteData = produit.photos.filter(photo => photosToDelete.includes(photo.id_Photo));
 
-          for (const photo of photosToDeleteData) {
-            const publicId = this.cloudinary.getPublicIdFromUrl(photo.url);
-            if (publicId) {
-              await this.cloudinary.deleteImage(publicId);
-            }
+        for (const photo of photosToDeleteData) {
+          const publicId = this.cloudinary.getPublicIdFromUrl(photo.url);
+          if (publicId) {
+            await this.cloudinary.deleteImage(publicId);
           }
-    
-          await this.prisma.photo.deleteMany({
-            where: { id_Photo: { in: photosToDelete }, produitId: id },
+        }
+
+        await this.prisma.photo.deleteMany({
+          where: { id_Photo: { in: photosToDelete }, produitId: id },
+        });
+      }
+
+      // Ajout de nouvelles photos
+      if (photosToAdd?.length > 0) {
+        const newPhotos = [];
+        for (const photo of photosToAdd) {
+          const result = await this.cloudinary.uploadImage(photo.url, 'produits');
+          newPhotos.push({
+            url: result.url,
+            couverture: photo.couverture || false,
+            produitId: id,
+            publicId: result.public_id,
           });
         }
-      } catch (photoDeleteError) {
-        console.error("Erreur lors de la suppression des photos", photoDeleteError);
-        throw new InternalServerErrorException("Erreur lors de la suppression des photos");
+
+        await this.prisma.photo.createMany({ data: newPhotos });
       }
-  
-      // Ajout de nouvelles photos
-      try {
-        if (photosToAdd?.length > 0) {
-          const newPhotos = [];
-          for (const photo of photosToAdd) {
-            let photoUrl = photo.url;
-  
-            if (photoUrl.startsWith('C:\\') || photoUrl.startsWith('/')) {
-              const localPath = path.resolve(photoUrl);
-              const result = await this.cloudinary.uploadLocalImage(localPath, 'produits');
-              photoUrl = result.url;
-            } else if (photoUrl.startsWith('content://') || photoUrl.startsWith('file://') || photoUrl.startsWith('assets-library://')) {
-              const result = await this.cloudinary.uploadMobileImage(photoUrl, 'produits');
-              photoUrl = result.url;
-            }
-  
-            newPhotos.push({
-              url: photoUrl,
-              couverture: photo.couverture || false,
-              produitId: id,
-            });
-          }
-  
-          await this.prisma.photo.createMany({ data: newPhotos });
-        }
-      } catch (photoAddError) {
-        console.error("Erreur lors de l'ajout des photos", photoAddError);
-        throw new InternalServerErrorException("Erreur lors de l'ajout des photos");
-      }
-  
+
       // Enregistrement de l'historique des prix
       if (prixInitial !== undefined && prixInitial !== produit.prixInitial) {
         try {
@@ -286,7 +246,7 @@ export class ProduitService {
             TypePrixEnum.PRODUIT,
             utilisateurId
           );
-  
+
           await this.notificationService.notify(
             utilisateurId,
             TypeNotifEnum.PRISE,
@@ -297,28 +257,23 @@ export class ProduitService {
           throw new InternalServerErrorException(`Erreur lors de l’enregistrement de l’historique des prix : ${historiqueError.message || 'Erreur inconnue'}`);
         }
       }
-  
+
       // Mise à jour des autres champs du produit
-      try {
-        const updatedProduit = await this.prisma.produit.update({
-          where: { id_Produit: id },
-          data: {
-            ...updateData,
-            prixInitial,
-            categorie: categorieId ? { connect: { id_Categorie: categorieId } } : undefined,
-          },
-          include: {
-            utilisateur: { select: { id_User: true, nom_user: true, role: true, email: true } }, // Ajout de l'email
-            categorie: { select: { id_Categorie: true, nomCategorie: true } },
-            photos: { select: { id_Photo: true, url: true, couverture: true } },
-          },
-        });
-  
-        return { message: 'Produit modifié avec succès', produit: updatedProduit };
-      } catch (updateError) {
-        console.error("Erreur lors de la mise à jour du produit", updateError);
-        throw new InternalServerErrorException('Erreur lors de la mise à jour du produit');
-      }
+      const updatedProduit = await this.prisma.produit.update({
+        where: { id_Produit: id },
+        data: {
+          ...updateData,
+          prixInitial,
+          categorie: categorieId ? { connect: { id_Categorie: categorieId } } : undefined,
+        },
+        include: {
+          utilisateur: { select: { id_User: true, nom_user: true, role: true, email: true } }, // Ajout de l'email
+          categorie: { select: { id_Categorie: true, nomCategorie: true } },
+          photos: { select: { id_Photo: true, url: true, couverture: true } },
+        },
+      });
+
+      return { message: 'Produit modifié avec succès', produit: updatedProduit };
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
         throw error;
@@ -330,14 +285,25 @@ export class ProduitService {
   
   // Suppression d'un produit
   async supprimerProduit(id: string, utilisateurId: string, role: string): Promise<{ message: string }> {
-    const produit = await this.prisma.produit.findUnique({ where: { id_Produit: id }, select: { utilisateurId: true } });
+    const produit = await this.prisma.produit.findUnique({ where: { id_Produit: id }, select: { utilisateurId: true, photos: true } });
     if (!produit) throw new NotFoundException('Produit non trouvé');
 
     if (produit.utilisateurId !== utilisateurId && role !== 'Admin') {
       throw new ForbiddenException('Accès non autorisé');
     }
 
+    // Suppression des photos de Cloudinary
+    for (const photo of produit.photos) {
+      const publicId = this.cloudinary.getPublicIdFromUrl(photo.url);
+      if (publicId) {
+        await this.cloudinary.deleteImage(publicId);
+      }
+    }
+
+    // Suppression des photos de la base de données
     await this.prisma.photo.deleteMany({ where: { produitId: id } });
+
+    // Suppression du produit
     await this.prisma.produit.delete({ where: { id_Produit: id } });
 
     return { message: 'Produit supprimé avec succès' };

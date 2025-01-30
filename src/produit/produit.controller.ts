@@ -18,28 +18,13 @@ export class ProduitController {
       private readonly historiquePrixService: HistoriquePrixService, // Injection du service
   ) {}
 
-  /**
-   * Endpoint pour créer un produit
-   * Gère les uploads de photos en regroupant les requêtes
-   */
+  // Endpoint pour créer un produit
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Admin', 'Vendeur')
-  @UseInterceptors(FileFieldsInterceptor([
-    { name: 'photos', maxCount: 10 }
-  ], {
-    fileFilter: (req, file, callback) => {
-      if (!file.mimetype.startsWith('image/')) {
-        return callback(new BadRequestException('Seules les images sont autorisées.'), false);
-      }
-      callback(null, true);
-    },
-    limits: { fileSize: 5 * 1024 * 1024 } // Limite à 5 Mo par fichier
-  }))  
   async creerProduit(
     @Body() createProduitDto: CreateProduitDto,
     @Req() req,
-    @UploadedFiles() files: { photos?: Express.Multer.File[] },
   ) {
     const utilisateurId = req.user.userId;
 
@@ -48,32 +33,11 @@ export class ProduitController {
     }
 
     try {
-      if (files?.photos?.length > 0) {
-        const uploadResults = await Promise.all(
-          files.photos.map((file) => this.produitService.cloudinary.uploadLocalImage(file.path, "produits")),
-        )
-  
-        createProduitDto.photos = uploadResults.map((result) => ({
-          url: result.url,
-          couverture: false,
-          publicId: result.public_id,
-        }))
-      }
-  
-      const result = await this.produitService.creerProduit(createProduitDto, utilisateurId)
+      const result = await this.produitService.creerProduit(createProduitDto, utilisateurId);
       return { success: true, data: result };
     } catch (error) {
-      console.error("Erreur lors de la création du produit:", error)
-      throw new InternalServerErrorException("Erreur lors de la création du produit: " + error.message)
-    } finally {
-      // Nettoyage des fichiers temporaires
-      if (files?.photos) {
-        files.photos.forEach((file) => {
-          fs.unlink(file.path, (err) => {
-            if (err) console.error("Erreur lors de la suppression du fichier temporaire:", err)
-          })
-        })
-      }
+      console.error("Erreur lors de la création du produit:", error);
+      throw new InternalServerErrorException("Erreur lors de la création du produit: " + error.message);
     }
   }
 
