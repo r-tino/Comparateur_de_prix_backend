@@ -8,7 +8,6 @@ import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { HistoriquePrixService } from '../historique-prix/historique-prix.service';
 import { NotificationService } from '../notification/notification.service';  // Importation du service
 
-
 @Injectable()
 export class ProduitService {
   constructor(
